@@ -61,7 +61,7 @@ export function guiToolbarFolded(fold: GuiToolbarFold, itemCount: number): boole
 
 /** The rendered width of the `count` leading items with degradation applied
  *  from `degradeFrom`, dividers charged at group boundaries. */
-function ladderWidth(
+export function ladderWidth(
   items: readonly GuiToolbarFoldItem[],
   count: number,
   degradeFrom: number,

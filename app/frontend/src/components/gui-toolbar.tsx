@@ -57,6 +57,7 @@ import { pickGuiActions, stripGuiLabel, type GuiPaletteAction } from "@/lib/pale
 import { presetLabel } from "@/lib/gui-geometry";
 import {
   computeGuiToolbarFold,
+  ladderWidth,
   guiToolbarFolded,
   type GuiToolbarFold,
   type GuiToolbarFoldItem,
@@ -87,6 +88,17 @@ const HEADER_CHIP_CLASS =
   "inline-flex items-center h-[24px] coarse:h-[26px] mx-[1px] px-1.5 rounded transition-colors hover:bg-bg-inset hover:text-text-primary";
 /** The shipped group divider (D11) — 2px side margins, a 14px hairline. */
 const HEADER_DIVIDER_CLASS = "mx-0.5 h-3.5 w-px bg-border";
+
+/** Centred mode: the clear air the cluster must keep from BOTH neighbours (the
+ *  name/meta block on the left, the pinned block + frame verbs on the right)
+ *  before centring is allowed. Below ~8px a centred cluster reads as crowded
+ *  rather than centred. */
+export const GUI_TOOLBAR_CENTRE_CLEARANCE_PX = 16;
+/** One-sided hysteresis on ENTERING centred mode (matches the fold's own
+ *  GUI_TOOLBAR_FOLD_HYSTERESIS_PX). Leaving is immediate. Without it the two
+ *  thresholds chase each other: right-aligning frees width, which unfolds an
+ *  item, which widens the cluster, which makes centring infeasible again. */
+export const GUI_TOOLBAR_CENTRE_HYSTERESIS_PX = 24;
 
 /** The resolution menu's row order — palette ids, each present only if the
  *  built list contains it (the lock rows exist on fine pointers only). */
@@ -170,6 +182,10 @@ export function GuiToolbar({
   onToolbarVisibleChange,
 }: GuiToolbarProps) {
   const [fold, setFold] = useState<GuiToolbarFold | null>(null);
+  /** Pixel offset INSIDE the spring at which the cluster is centred on the
+   *  header's midpoint, or null for right-aligned (the flow default). */
+  const [centreLeft, setCentreLeft] = useState<number | null>(null);
+  const centredRef = useRef(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const probeRef = useRef<HTMLDivElement>(null);
@@ -252,12 +268,74 @@ export function GuiToolbar({
         short: item.degradable ? widths.get(`${item.id}:short`) : undefined,
         group: item.group,
       }));
-      setFold((prev) =>
-        computeGuiToolbarFold(
+      const pinnedW = widths.get("pinned") ?? 0;
+      const dividerW = widths.get("divider") ?? 0;
+
+      // Centred mode is decided BEFORE the fold, because the two modes have
+      // different budgets and fitting against the wrong one would place items
+      // that then overlap a neighbour. The spring is `flex-1`, so its own box
+      // already spans exactly the free space between the name/meta block and
+      // the frame verbs — the header geometry falls out of two rects.
+      const header = root.parentElement;
+      const rootRect = root.getBoundingClientRect();
+      let centred: number | null = null;
+      let centredBudget = 0;
+      if (header) {
+        const hs = getComputedStyle(header);
+        const hRect = header.getBoundingClientRect();
+        const contentLeft = hRect.left + (parseFloat(hs.paddingLeft) || 0);
+        const contentRight = hRect.right - (parseFloat(hs.paddingRight) || 0);
+        const hw = contentRight - contentLeft;
+        const leftBlock = rootRect.left - contentLeft;
+        // The frame verbs sit outside the spring; the pinned block sits at the
+        // spring's right end, so it counts toward the right side too.
+        const rightBlock = contentRight - rootRect.right + pinnedW;
+        const clear = GUI_TOOLBAR_CENTRE_CLEARANCE_PX;
+        // Centred, the cluster may only use the SYMMETRIC middle.
+        centredBudget = hw - 2 * Math.max(leftBlock, rightBlock) - 2 * clear;
+        const centredFold = computeGuiToolbarFold(centredBudget, foldItems, 0, dividerW, null);
+        // Centring must be FREE. The symmetric middle is narrower than the
+        // spring, so fitting against it would otherwise always "succeed" by
+        // folding harder — at 860px that quietly cost 4 controls, and at 720px
+        // all but one. Compare against what right-aligned would show and give
+        // up centring the moment it would hide or degrade anything extra.
+        const rightFold = computeGuiToolbarFold(
           root.clientWidth,
           foldItems,
-          widths.get("pinned") ?? 0,
-          widths.get("divider") ?? 0,
+          pinnedW,
+          dividerW,
+          null,
+        );
+        const free =
+          centredFold.visibleCount >= rightFold.visibleCount &&
+          centredFold.degradeFrom >= rightFold.degradeFrom;
+        const clusterW = ladderWidth(
+          foldItems,
+          centredFold.visibleCount,
+          centredFold.degradeFrom,
+          dividerW,
+        );
+        const centredStart = contentLeft + (hw - clusterW) / 2;
+        // Entering costs the hysteresis margin; leaving is immediate.
+        const margin = centredRef.current ? 0 : GUI_TOOLBAR_CENTRE_HYSTERESIS_PX;
+        const fits =
+          free &&
+          clusterW > 0 &&
+          centredStart >= contentLeft + leftBlock + clear + margin &&
+          centredStart + clusterW <= contentRight - rightBlock - clear - margin;
+        if (fits) centred = centredStart - rootRect.left;
+      }
+      centredRef.current = centred !== null;
+      setCentreLeft(centred);
+
+      setFold((prev) =>
+        computeGuiToolbarFold(
+          // Centred fits the symmetric middle the decision above validated;
+          // right-aligned keeps today's full-spring budget.
+          centred !== null ? centredBudget : root.clientWidth,
+          foldItems,
+          pinnedW,
+          dividerW,
           prev,
         ),
       );
@@ -451,20 +529,39 @@ export function GuiToolbar({
       // The cluster's internal rhythm is 2px (mx-[1px] a side), so an
       // un-cancelled header gap leaves the pinned block's right seam wider
       // than its left. Every other major part keeps the header's 6px.
-      className="relative flex-1 min-w-0 -mr-1.5 flex items-center justify-end text-text-secondary"
+      // min-h keeps the spring a real box: in centred mode the cluster is
+      // absolutely positioned, and with nothing folded there is no pinned
+      // block either, so the spring would otherwise have no in-flow child,
+      // collapse to zero height, and read as hidden.
+      className="relative flex-1 min-w-0 min-h-[24px] coarse:min-h-[26px] -mr-1.5 flex items-center justify-end text-text-secondary"
     >
       <TipGroup>
-        {visibleItems.map((item, i) => {
-          const prevGroup = i > 0 ? visibleItems[i - 1].group : null;
-          return (
-            <span key={item.id} className="contents">
-              {prevGroup !== null && item.group !== prevGroup ? (
-                <span aria-hidden="true" className={HEADER_DIVIDER_CLASS} />
-              ) : null}
-              {renderControl(item, fold !== null && i >= fold.degradeFrom ? "short" : "full", false)}
-            </span>
-          );
-        })}
+        {/* Centred mode lifts the ladder out of the flow and pins it at the
+            header's midpoint (an offset INSIDE this spring, since the spring
+            is the positioned ancestor). The pinned block and the frame verbs
+            stay right-aligned either way — they are chrome, not content. */}
+        <span
+          data-testid="gui-toolbar-cluster"
+          data-centred={centreLeft !== null ? "true" : undefined}
+          className={
+            centreLeft !== null
+              ? "absolute top-0 bottom-0 flex items-center"
+              : "contents"
+          }
+          style={centreLeft !== null ? { left: `${Math.round(centreLeft)}px` } : undefined}
+        >
+          {visibleItems.map((item, i) => {
+            const prevGroup = i > 0 ? visibleItems[i - 1].group : null;
+            return (
+              <span key={item.id} className="contents">
+                {prevGroup !== null && item.group !== prevGroup ? (
+                  <span aria-hidden="true" className={HEADER_DIVIDER_CLASS} />
+                ) : null}
+                {renderControl(item, fold !== null && i >= fold.degradeFrom ? "short" : "full", false)}
+              </span>
+            );
+          })}
+        </span>
         {showGear ? (
           <span className="flex items-center shrink-0">
             <span aria-hidden="true" className={HEADER_DIVIDER_CLASS} />
