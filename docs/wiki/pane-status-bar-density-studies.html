@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pane &amp; Status Bar Density Studies</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #171b24; --inset: #0a0c12; --row: #12151d;
+    --tp: #e8eaf0; --ts: #7a8394; --border: #454d66;
+    --green: #22c55e; --yellow: #facc15; --blue: #60a5fa; --red: #f87171; --purple: #c084fc; --gray: #7a8394;
+    --amber: #f59e0b; --accent: #7dd3fc;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  body.light {
+    --bg: #f8f9fb; --card: #ffffff; --inset: #eef0f4; --row: #f3f4f7;
+    --tp: #1a1d24; --ts: #6b7280; --border: #d1d5db;
+    --green: #16a34a; --yellow: #b07d02; --blue: #2563eb; --red: #dc2626; --purple: #9333ea; --gray: #6b7280; --accent: #0369a1;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--tp); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; padding: 28px 32px 80px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 42px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 13px; margin: 18px 0 6px; color: var(--tp); }
+  .sub { color: var(--ts); margin: 0 0 18px; max-width: 900px; }
+  .sub b, .cap b, p b, li b { color: var(--tp); }
+  p { max-width: 900px; color: #b6bcc9; }
+  body.light p { color: #4b5563; }
+  code { font-family: var(--mono); font-size: 11.5px; background: var(--inset); padding: 0 4px; border-radius: 3px; color: #cbd5e1; }
+  body.light code { color: #334155; }
+  table { border-collapse: collapse; font-size: 12px; margin: 8px 0 14px; }
+  td, th { border: 1px solid var(--border); padding: 4px 8px; text-align: left; color: #b6bcc9; vertical-align: top; }
+  body.light td { color: #4b5563; }
+  th { color: var(--tp); font-weight: 600; }
+  td.n { text-align: right; font-family: var(--mono); }
+  td.dup { color: var(--red); font-weight: 600; }
+  .tag { display: inline-block; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); color: var(--ts); margin: 0 6px 6px 0; white-space: nowrap; }
+  .tag.rec { border-color: var(--green); color: var(--green); }
+  .tag.bad { border-color: var(--red); color: var(--red); }
+  .tag.park { border-color: var(--blue); color: var(--blue); }
+  .tag.bug { border-color: var(--amber); color: var(--amber); }
+  ul { max-width: 900px; color: #b6bcc9; } body.light ul { color: #4b5563; }
+  li { margin: 3px 0; }
+
+  .toolbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); padding: 8px 0 10px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .toolbar button { font: 11px var(--mono); padding: 3px 9px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--ts); cursor: pointer; }
+  .toolbar button.on { color: var(--green); border-color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
+  .toolbar .hint { font-size: 11px; color: var(--ts); margin-left: 6px; }
+  .toolbar label { font: 11px var(--mono); color: var(--ts); display: inline-flex; align-items: center; gap: 6px; }
+  .toolbar input[type=range] { width: 260px; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+  .study { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .study .cap { font-size: 11px; color: var(--ts); margin-top: 8px; line-height: 1.45; }
+  .study h3 { margin: 0 0 8px; }
+
+  /* ---------- callouts ---------- */
+  .co { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--amber); color: #000; font: 700 9.5px var(--mono); flex: none; vertical-align: middle; }
+  .co.blue { background: var(--blue); }
+  .legend li { margin: 4px 0; }
+  .legend .co { margin-right: 6px; }
+
+  /* ---------- sidebar PANE panel mock (mirrors status-panel.tsx at text-xs) ---------- */
+  .side { background: var(--inset); border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow: hidden; position: relative; }
+  .side .row { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 1px 8px 1px 30px; color: var(--tp); font-weight: 500; background: color-mix(in srgb, var(--ts) 14%, transparent); position: relative; }
+  .side .row .well { position: absolute; left: 0; top: 0; bottom: 0; width: 22px; background: color-mix(in srgb, #94a3b8 12%, transparent); box-shadow: inset -1px 0 0 color-mix(in srgb, #94a3b8 30%, transparent); }
+  .side .row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side .row .tr { margin-left: auto; color: var(--purple); font-size: 11px; }
+  .side .ph { display: flex; align-items: center; gap: 6px; padding: 6px 8px 4px 8px; border-top: 3px solid var(--border); color: var(--ts); font-size: 11px; letter-spacing: .04em; }
+  .side .ph .t { color: var(--tp); font-weight: 600; }
+  .side .ph .hr { margin-left: 6px; display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--ts); letter-spacing: 0; font-size: 12px; }
+  .side .ph .hr .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side .ph .rf { margin-left: auto; width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: var(--ts); font-size: 12px; flex: none; }
+  .side .body { padding: 2px 8px 8px; display: flex; flex-direction: column; }
+  .side .ln { display: flex; align-items: baseline; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.75; min-width: 0; }
+  .side .ln .k { color: var(--ts); flex: none; width: 4ch; }
+  .side .ln .i { color: var(--accent); flex: none; margin-right: .6ch; }
+  .side .ln .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .side .ln .v.p { color: var(--tp); } .side .ln .v.s { color: var(--ts); }
+  .side .ln .v .dim { color: var(--ts); }
+  .side .ln .v .b { color: var(--tp); font-weight: 600; }
+  .side .ln .v .green { color: var(--green); } .side .ln .v .purple { color: var(--purple); }
+  .side .ln .co { margin-left: auto; margin-right: 0; flex: none; }
+  .side .ln.cont { padding-left: 4ch; }
+  .side .ln.cont .v { color: var(--ts); }
+  .side .ln .v.yield { display: flex; min-width: 0; }
+  .side .ln .v.yield .par { color: var(--ts); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; direction: rtl; text-align: left; }
+  .side .ln .v.yield .par bdi { direction: ltr; unicode-bidi: isolate; }
+  .side .ln .v.yield .base { flex: none; color: var(--tp); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+  .tmuxline { background: #0b0d12; color: #cbd5e1; font: 11px/1.6 var(--mono); padding: 2px 8px; border-top: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tmuxline .sel { background: var(--blue); color: #fff; padding: 0 4px; }
+  .tmuxline .sess { color: var(--blue); font-weight: 700; }
+
+  /* ---------- status bar mock (mirrors status-bar.tsx: 24px, mono 10.5px, gap 12px) ---------- */
+  .barwrap { overflow-x: auto; overflow-y: hidden; max-width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--inset); }
+  .barwrap .bar { flex: none; }
+  .bar { height: 24px; display: flex; align-items: center; gap: 12px; padding: 0 8px; font: 10.5px/1 var(--mono); color: var(--tp); overflow: hidden; white-space: nowrap; }
+  .bar .cl { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .bar .cl.r { margin-left: auto; }
+  .bar .sg { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; }
+  .bar .sg.fix { flex: none; }
+  .bar .k { color: var(--ts); flex: none; }
+  .bar .v { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .bar .v.plain { color: var(--tp); } .bar .v.s { color: var(--ts); }
+  .bar .green { color: var(--green); } .bar .purple { color: var(--purple); } .bar .yellow { color: var(--yellow); }
+  .bar .chip { border: 1px solid var(--border); border-radius: 3px; padding: 2px 4px; color: var(--ts); flex: none; }
+  .bar .chip.on { border-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+  .bar .cdot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .bar .arrow { color: var(--ts); flex: none; }
+  .barlab { font: 10.5px var(--mono); color: var(--ts); margin: 10px 0 4px; display: flex; gap: 12px; align-items: baseline; }
+  .barlab b { color: var(--tp); }
+  .barlab .w { margin-left: auto; }
+  .folded { font: 10.5px var(--mono); color: var(--ts); margin-top: 4px; min-height: 14px; }
+  .folded b { color: var(--tp); font-weight: 500; }
+
+  .strip5 .bar { margin-bottom: 4px; }
+  .strip5 .barlab { margin-top: 12px; }
+  .budget td.over { color: var(--red); font-weight: 600; }
+  .budget td.ok { color: var(--green); }
+  .kv { font-family: var(--mono); font-size: 11.5px; }
+  .note { border-left: 3px solid var(--blue); padding: 6px 12px; background: color-mix(in srgb, var(--blue) 8%, transparent); border-radius: 0 6px 6px 0; max-width: 900px; margin: 12px 0; color: #b6bcc9; }
+  body.light .note { color: #4b5563; }
+  .rec-list li { margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button id="tLight">light theme</button>
+  <button id="tPanel" class="on">PANE section on</button>
+  <label>bar width <input id="wRange" type="range" min="640" max="1600" step="4" value="1512"> <span id="wVal">1512</span>px</label>
+  <span class="hint">The width slider drives every status-bar mock on the page; the PANE toggle shows the proposed yield rule (§ D4).</span>
+</div>
+
+<h1>Pane &amp; Status Bar Density Studies</h1>
+<p class="sub">Design study (260914 discussion) for the two desktop register surfaces the user reads together: the sidebar <b>PANE</b> section (<code>sidebar/status-panel.tsx</code>) and the shell-level <b>status bar</b> (<code>components/status-bar.tsx</code>). Both were read as "too congested" on a 1512 px MacBook viewport with the PANE section opted in. The study annotates the screenshot state, inventories where every datum appears, budgets the text against the real widths, and proposes changes per surface with a live fold mock. Authorities it builds on: <code>docs/specs/status-pyramid.md</code> § Row Minimalism (the five registers stay orthogonal — decided), <code>status-signals.md</code> § Status Bar (the degradation ladder), and the flyout card's <i>continuation lines rather than truncation</i> decision.</p>
+
+<h2>A · Today — annotated</h2>
+<p>Both mocks reproduce the screenshot's exact strings at the shipped geometry: the sidebar at its 220 px default (mono 12 px), the bar at 24 px / mono 10.5 px / 12 px gaps, with each value span <code>min-w-0 truncate</code> exactly as the components render it. Drag the width slider to watch the bar; nothing below is hand-truncated.</p>
+
+<div class="two">
+  <div class="study">
+    <h3>A1 · Sidebar tail + PANE section, 220 px</h3>
+    <div class="side" style="width:220px">
+      <div class="row"><span class="well"></span><span class="dot"></span><span class="nm">compose-strip-ux</span><span class="tr">⑂</span></div>
+      <div class="ph"><span>▾</span><span class="t">PANE</span><span class="hr"><span class="dot"></span><span class="nm">compose-strip-ux</span></span><span class="rf">⟳</span></div>
+      <div class="body">
+        <div class="ln"><span class="k">tmx</span><span class="i"></span><span class="v s">pane 2/1 %107</span><span class="co">4</span></div>
+        <div class="ln"><span class="k">cwd</span><span class="i"></span><span class="v s">…/run-kit.worktrees/mighty-mammoth</span><span class="co">3</span></div>
+        <div class="ln"><span class="k">git</span><span class="i"></span><span class="v p">260913-png4-compose-default-on</span><span class="co">2</span></div>
+        <div class="ln"><span class="k">pr&nbsp;</span><span class="i"></span><span class="v p">#971 <span class="dim">·</span> <span class="purple">merged</span> <span class="dim">↗</span></span></div>
+        <div class="ln"><span class="k">out</span><span class="i">⣾</span><span class="v s">active · claude</span><span class="co">5</span></div>
+        <div class="ln"><span class="k">agt</span><span class="i">✦</span><span class="v s">active</span><span class="co">5</span></div>
+        <div class="ln"><span class="k">fab</span><span class="i">◴</span><span class="v p">png4 compose-default-on · review-pr · active</span><span class="co">2</span></div>
+      </div>
+    </div>
+    <div class="side" style="width:220px; margin-top:6px; border-radius:0 0 6px 6px">
+      <div class="tmuxline"><span class="sess">runKit</span> 11:rebranding-study 12:quake-terminal… <span class="sel">15:compose-strip-ux</span> 03:57</div>
+    </div>
+    <div class="cap">Top: the selected window row. Middle: the PANE section as shipped. Bottom: the tmux status line that sits inside the terminal pane, drawn here for the name count only <span class="co">1</span>.</div>
+  </div>
+  <div class="study">
+    <h3>A2 · Status bar, live width</h3>
+    <div class="barlab"><b>today</b> <span>CSS breakpoint ladder · every segment <code>min-w-0 truncate</code></span><span class="w"><span class="wv">1512</span>px</span></div>
+    <div class="barwrap"><div class="bar today-bar" data-today>
+      <div class="cl">
+        <span class="sg"><span class="k">⑂</span><span class="v plain">260913-png4-compose-default-on</span></span>
+        <span class="sg"><span class="k">pr</span><span class="v plain">#971 · <span class="purple">merged</span></span><span class="arrow">↗</span></span>
+        <span class="sg"><span class="k">fab</span><span class="v plain">png4 compose-default-on · review-pr · active</span></span>
+        <span class="sg"><span class="dot"></span><span class="k">agt</span><span class="v plain">active</span></span>
+        <span class="sg bp-lg"><span class="k">tmx</span><span class="v plain">pane 2/1 %107</span></span>
+        <span class="sg bp-xl"><span class="k">cwd</span><span class="v plain">mighty-mammoth</span></span>
+      </div>
+      <div class="cl r">
+        <span class="sg fix bp-md"><span class="k">cpu</span><span class="v plain">2%</span><span class="k">mem</span><span class="v green">14G/59G</span><span class="k bp-lg">ld</span><span class="v plain bp-lg">1%</span></span>
+        <span class="chip bp-xl">◷ in 22m</span>
+        <span class="sg"><span class="v s">runKit</span></span>
+        <span class="sg"><span class="v s">dev-ws-sahil02 <span class="plain bp-700">v3.19.61</span></span></span>
+        <span class="chip bp-xl">⌘K</span>
+        <span class="chip on bp-xl">a▏</span>
+        <span class="chip ovf">…</span>
+        <span class="cdot"></span>
+      </div>
+    </div></div>
+    <div class="cap">The left cluster and the right cluster are the two sides of one <code>ml-auto</code> flex row; both are <code>min-w-0</code>, so flex shrinks every truncating value in proportion to its natural width — the branch and the fab line lose the most, but even the 6-char server name gives way <span class="co">7</span>. The metrics segment carries no <code>min-w-0</code> and never shrinks <span class="co">8</span>. Breakpoint drops (<code>xl</code> 1280 / <code>lg</code> 1024 / <code>md</code> 768 / 700) are simulated from the slider.</div>
+  </div>
+</div>
+
+<h3>What the callouts mark</h3>
+<ul class="legend">
+  <li><span class="co">1</span><b>The window name appears three times in ~180 px of height</b> — the selected sidebar row, the PANE header, and the tmux status line's current window. The PANE header's copy earns its place only when the panel is collapsed or the row is scrolled away; otherwise it is the row's neighbour.</li>
+  <li><span class="co">2</span><b>The slug appears twice per surface</b> — <code>compose-default-on</code> is in the <code>git</code> row (the branch <i>is</i> the change folder name, <code>260913-png4-compose-default-on</code>) and again in the <code>fab</code> row; the bar repeats the pair (<code>⑂</code> + <code>fab</code>). Together the two rows spend 76 characters on one identity.</li>
+  <li><span class="co">3</span><b><code>cwd</code> truncates its informative end</b> — <code>shortenPath</code> keeps the last two segments, then CSS eats the tail: <code>…/run-kit.worktrees/mighty-ma…</code>. The parent (<code>run-kit.worktrees</code>) is the low-value part and it survives; the worktree name is the answer and it dies. The bar already uses the basename alone.</li>
+  <li><span class="co">4</span><span class="tag bug">bug</span><b><code>pane 2/1</code> is an off-by-one</b> — the panel and the bar render <code>paneIndex + 1</code>, but tmux's <code>#{pane_index}</code> already honours <code>pane-base-index</code>, which is <code>1</code> on this host (checked: <code>tmux show-options -gv pane-base-index</code> → 1). A one-pane window reads "pane 2 of 1". The index the user types in tmux is the verbatim one.</li>
+  <li><span class="co">5</span><b>Three "active"s in three rows</b> — the dot, <code>out active · claude</code>, and <code>agt active</code>. The registers are orthogonal by decision (L0 speaks bytes, L1 speaks intent) and the study keeps them; the perceived duplication is a <i>value-vocabulary</i> problem, not a register-count problem — see § C4.</li>
+  <li><span class="co">6</span><b>The bar truncates everything at 1512 px</b> — the ladder's stage 2 (whole-segment drops) fires only below 1280 px; above it, stage 1 (truncate in place) is the only relief, and it is applied to six segments at once. The band the design assumed "needs to survive" (700–1100 px) is not where the pain is: real values (30-char branches, 48-char fab lines) overflow a full-width bar.</li>
+  <li><span class="co">7</span><b>Identity pays for metrics</b> — <code>runKit</code> becomes <code>runK…</code> and <code>dev-ws-sahil02 v3.19.61</code> becomes <code>dev-ws-sahil02…</code> because host and version share one truncating span: the version disappears by truncation long before its documented &lt;700 px drop, silently. <span class="tag bug">bug</span> The memory's ladder (version drops at 700) and the DOM (version truncates first) disagree.</li>
+  <li><span class="co">8</span><b><code>cpu 2% mem 14G/59G ld 1%</code> never yields</b> — 24 characters, three labels, no <code>min-w-0</code>; the graphs already live in the hover flyout, so the strip form carries more digits than a glance uses.</li>
+</ul>
+
+<h2>B · Inventory — where each datum appears</h2>
+<p>Counting the desktop viewport as the screenshot shows it (PANE section on, compose strip on). The tmux status line is the terminal's own chrome, but the eye does not distinguish it from ours — it is the third horizontal bar stacked above the compose strip and the status bar.</p>
+<table class="inv">
+  <tr><th>Datum</th><th>Sidebar row</th><th>PANE header</th><th>PANE rows</th><th>Bar · left</th><th>Bar · right</th><th>Top bar</th><th>tmux line</th><th>Count</th></tr>
+  <tr><td>window name</td><td>●</td><td>●</td><td></td><td></td><td></td><td>● <span class="kv">Tab:</span> heading</td><td>●</td><td class="n dup">4</td></tr>
+  <tr><td>status dot</td><td>●</td><td>●</td><td></td><td>● (beside <code>agt</code>)</td><td></td><td></td><td></td><td class="n dup">3</td></tr>
+  <tr><td>change slug</td><td></td><td></td><td>● git · ● fab</td><td>● ⑂ · ● fab</td><td></td><td></td><td></td><td class="n dup">4</td></tr>
+  <tr><td>change id</td><td></td><td></td><td>● git · ● fab</td><td>● ⑂ · ● fab</td><td></td><td></td><td></td><td class="n dup">4</td></tr>
+  <tr><td>stage · state</td><td></td><td></td><td>● fab</td><td>● fab</td><td></td><td></td><td></td><td class="n">2</td></tr>
+  <tr><td>PR # · state</td><td>glyph</td><td></td><td>● pr</td><td>● pr</td><td></td><td></td><td></td><td class="n">3</td></tr>
+  <tr><td>agent state</td><td>dot hue</td><td>dot hue</td><td>● agt</td><td>● agt</td><td></td><td></td><td></td><td class="n">2 + 2 hues</td></tr>
+  <tr><td>output activity</td><td></td><td></td><td>● out</td><td></td><td></td><td></td><td></td><td class="n">1</td></tr>
+  <tr><td>pane index · id</td><td></td><td></td><td>● tmx</td><td>● tmx</td><td></td><td></td><td></td><td class="n">2</td></tr>
+  <tr><td>cwd</td><td></td><td></td><td>● cwd</td><td>● cwd</td><td></td><td></td><td></td><td class="n">2</td></tr>
+  <tr><td>server name</td><td>group header</td><td></td><td></td><td></td><td>●</td><td>● breadcrumb</td><td>●</td><td class="n dup">4</td></tr>
+  <tr><td>host name</td><td></td><td></td><td></td><td></td><td>●</td><td>host crumb</td><td></td><td class="n">2</td></tr>
+  <tr><td>version</td><td></td><td></td><td></td><td></td><td>● (truncated away)</td><td>menu row</td><td></td><td class="n">1–2</td></tr>
+  <tr><td>cpu · mem · ld</td><td></td><td></td><td></td><td></td><td>●</td><td></td><td></td><td class="n">1</td></tr>
+  <tr><td>cron next-fire</td><td></td><td></td><td></td><td></td><td>● ◷</td><td></td><td></td><td class="n">1</td></tr>
+  <tr><td>⌘K · compose hints</td><td></td><td></td><td></td><td></td><td>● ●</td><td>launcher</td><td></td><td class="n">2</td></tr>
+  <tr><td>window list</td><td>● tree</td><td></td><td></td><td></td><td></td><td>▾ switcher</td><td>●</td><td class="n dup">3</td></tr>
+</table>
+<p>Two facts fall out. <b>First</b>, the PANE section and the bar's left cluster are the same six registers rendered twice — by design: the bar "absorbs the retired desktop PANE panel", and the panel is opt-in precisely so the bar can be the desktop's only copy. When a user opts the panel back in (as here), nothing yields, so the desktop shows the register view twice. <b>Second</b>, the change identity (id + slug) is written four times in the visible chrome, because the branch and the fab change are the same string with a date prefix.</p>
+
+<h2>C · Proposals — the PANE section</h2>
+
+<h3>C0 · Width budget at the default sidebar</h3>
+<p>At 220 px the body is 204 px wide; mono 12 px is ≈ 7.2 px per character, so a row holds <b>≈ 28 characters</b>: a 4-advance key, a 2-advance icon, and <b>≈ 22 characters of value</b>. Today's values against that budget:</p>
+<table class="budget">
+  <tr><th>Row</th><th>Value today</th><th>chars</th><th>Budget 22</th></tr>
+  <tr><td><code>tmx</code></td><td><code>pane 2/1 %107</code></td><td class="n">13</td><td class="ok">fits</td></tr>
+  <tr><td><code>cwd</code></td><td><code>…/run-kit.worktrees/mighty-mammoth</code></td><td class="n">34</td><td class="over">+12 — and the tail dies</td></tr>
+  <tr><td><code>git</code></td><td><code>260913-png4-compose-default-on</code></td><td class="n">30</td><td class="over">+8</td></tr>
+  <tr><td><code>pr</code></td><td><code>#971 · merged ↗</code></td><td class="n">15</td><td class="ok">fits (open PRs: <code>#971 · open · checks pass · review: approved</code> = 42)</td></tr>
+  <tr><td><code>out</code></td><td><code>claude — idle 4m since last output</code></td><td class="n">34</td><td class="over">+12 when idle</td></tr>
+  <tr><td><code>agt</code></td><td><code>waiting 3m</code></td><td class="n">10</td><td class="ok">fits</td></tr>
+  <tr><td><code>fab</code></td><td><code>png4 compose-default-on · review-pr · active</code></td><td class="n">44</td><td class="over">+22 — half the value is cut</td></tr>
+</table>
+<p>Four of seven rows overflow the default sidebar by design. The user widens the sidebar or reads the tooltip. The proposals below get every row under budget at 220 px without removing a register.</p>
+
+<div class="two">
+  <div class="study">
+    <h3>C1 · Proposed PANE section, same 220 px</h3>
+    <div class="side" style="width:220px">
+      <div class="row"><span class="well"></span><span class="dot"></span><span class="nm">compose-strip-ux</span><span class="tr">⑂</span></div>
+      <div class="ph"><span>▾</span><span class="t">PANE</span><span class="hr"><span class="dot"></span><span class="nm">compose-strip-ux</span></span><span class="rf">⟳</span></div>
+      <div class="body">
+        <div class="ln"><span class="k">tmx</span><span class="i"></span><span class="v s">%107</span><span class="co blue">a</span></div>
+        <div class="ln"><span class="k">cwd</span><span class="i"></span><span class="v yield"><span class="par"><bdi>~/code/sahil87/run-kit.worktrees/</bdi></span><span class="base">mighty-mammoth</span></span><span class="co blue">b</span></div>
+        <div class="ln"><span class="k">git</span><span class="i"></span><span class="v p"><span class="dim">260913-</span>png4-compose-default-on</span><span class="co blue">c</span></div>
+        <div class="ln"><span class="k">pr&nbsp;</span><span class="i"></span><span class="v p">#971 <span class="dim">·</span> <span class="purple">merged</span> <span class="dim">↗</span></span></div>
+        <div class="ln"><span class="k">out</span><span class="i">⣾</span><span class="v s">claude · flowing</span><span class="co blue">e</span></div>
+        <div class="ln"><span class="k">agt</span><span class="i">✦</span><span class="v s">active</span></div>
+        <div class="ln"><span class="k">fab</span><span class="i">◴</span><span class="v p">png4 <span class="dim">·</span> review-pr <span class="dim">·</span> <span class="green">active</span></span><span class="co blue">d</span></div>
+      </div>
+    </div>
+    <div class="cap">Every row fits at 220 px. The register count is unchanged (Row Minimalism holds); only the <i>values</i> changed shape. Multi-pane windows read <code>tmx %107 · 2/3</code>. An idle pane reads <code>out claude · idle 4m</code>.</div>
+  </div>
+  <div class="study">
+    <h3>C2 · The same window with a non-change branch</h3>
+    <div class="side" style="width:220px">
+      <div class="ph"><span>▾</span><span class="t">PANE</span><span class="hr"><span class="dot"></span><span class="nm">docs-sweep</span></span><span class="rf">⟳</span></div>
+      <div class="body">
+        <div class="ln"><span class="k">tmx</span><span class="i"></span><span class="v s">%88 · 2/3</span></div>
+        <div class="ln"><span class="k">cwd</span><span class="i"></span><span class="v yield"><span class="par"><bdi>~/code/sahil87/</bdi></span><span class="base">run-kit</span></span></div>
+        <div class="ln"><span class="k">git</span><span class="i"></span><span class="v p">main</span></div>
+        <div class="ln"><span class="k">out</span><span class="i">⣾</span><span class="v s">zsh · idle 12m</span></div>
+        <div class="ln"><span class="k">fab</span><span class="i">◴</span><span class="v p">t7vy launch <span class="dim">·</span> apply <span class="dim">·</span> <span class="green">active</span></span></div>
+      </div>
+    </div>
+    <div class="cap">When the branch does <b>not</b> carry the change (here <code>main</code>, or a hand-named <code>t7vy-launch</code>), the fab row keeps its slug — the slug appears exactly once either way. This is also where the rule becomes a signal: a fab row with a slug beside a branch row means "this pane is not on its change branch" — the exact situation the <code>git-pr</code> branch-guard trips on.</div>
+  </div>
+</div>
+
+<ul class="legend">
+  <li><span class="co blue">a</span><b><code>tmx</code> shows the pane id, and the index only when it disambiguates.</b> <code>%107</code> alone for a single-pane window; <code>%107 · 2/3</code> for multi-pane, with tmux's index verbatim (fixes the off-by-one at the source — the bar and the overflow menu row share the string). Copy value stays <code>%107</code>.</li>
+  <li><span class="co blue">b</span><b><code>cwd</code> is basename-first; the parent yields.</b> The basename is <code>shrink-0</code> in primary ink, the parent path is dim and truncates from its <i>head</i> (a <code>direction: rtl</code> span holding an isolated <code>bdi</code> — no JS measuring). At any width the row ends in the worktree name. Copy stays the full path; the tooltip stays the full path.</li>
+  <li><span class="co blue">c</span><b><code>git</code> dims the date prefix</b> when the branch matches the change pattern (<code>^\d{6}-</code>). It is a purely visual de-emphasis so the eye lands on <code>png4-compose-default-on</code>; the copy is still the whole branch.</li>
+  <li><span class="co blue">d</span><b><code>fab</code> drops the slug when the branch already carries it</b> — <code>png4 · review-pr · active</code>. The rule lives in the shared resolver (<code>getFabLine(win, branch)</code> in <code>sidebar/registers.ts</code>) so the PANE section, the flyout card, and the bar cannot disagree: <i>if the active pane's branch ends with <code>&lt;id&gt;-&lt;slug&gt;</code>, omit the slug</i>. This is also what the spec's own register example shows — <code>fab 260705-dmex · review · failed</code> has no slug. The <code>displayState</code> gets its fab-hue colour (green active / yellow ready / red failed) as the dot does, so the row reads as state, not prose.</li>
+  <li><span class="co blue">e</span><b><code>out</code> stops narrating.</b> <code>active · claude</code> → <code>claude · flowing</code>; <code>claude — idle 4m since last output</code> → <code>claude · idle 4m</code>. The tier-1 tip (<i>Output activity</i>) already says what the elapsed means. Command first because that is the stable token; the state word varies. "flowing" is proposed over "active" so L0 and L1 stop using the same word for different things (bytes vs. intent) — this is the one vocabulary change and it is UI-only (no hook or tmux option changes; <code>activity: "active"|"idle"</code> stays the wire value).</li>
+</ul>
+
+<h3>C3 · Continuation instead of truncation for long registers</h3>
+<p>Even after the diet, an open PR row (<code>#971 · open · checks pass · review: approved</code>, 42 chars) overflows 22. The flyout card already decided <i>continuation lines rather than truncation</i> for exactly this register; the PANE section can adopt the same rule for <code>pr</code> and <code>fab</code>: the decisive tokens on the key line, the rest on a dim continuation indented under the value column. A row never exceeds two lines; the third and later segments truncate as today.</p>
+<div class="side" style="width:220px">
+  <div class="body">
+    <div class="ln"><span class="k">pr&nbsp;</span><span class="i"></span><span class="v p">#971 <span class="dim">·</span> <span class="green">open</span> <span class="dim">↗</span></span></div>
+    <div class="ln cont"><span class="v s"><span class="green">checks pass</span> · <span class="green">review: approved</span></span></div>
+    <div class="ln"><span class="k">fab</span><span class="i">◴</span><span class="v p">png4 <span class="dim">·</span> review-pr <span class="dim">·</span> <span class="green">active</span></span></div>
+  </div>
+</div>
+<p class="cap" style="max-width:900px">Cost: the panel grows by one line per PR with checks. It is the opt-in detail surface; growth there is the right trade. The bar (a one-line strip) never wraps — it folds (§ D1).</p>
+
+<h3>C4 · Kept as is, deliberately</h3>
+<ul>
+  <li><b>Five orthogonal registers.</b> Collapsing <code>out</code>/<code>agt</code>/<code>fab</code> into one status line was rejected in the spec (<i>Row Minimalism</i>, decided): the dot must stay mentally derivable from the rows. The perceived triple "active" is fixed by vocabulary (§ C1 e), not by merging.</li>
+  <li><b>The PANE header's dot + name.</b> It is the only status that survives collapse, and the panel is bottom-aligned while the selected row may be scrolled out of view. The duplicate with the row directly above is the cost of that guarantee.</li>
+  <li><b>The refresh button.</b> Server-global PR refresh; unchanged.</li>
+</ul>
+
+<h2>D · Proposals — the status bar</h2>
+
+<h3>D1 · A measured priority fold replaces the breakpoint ladder</h3>
+<p>The bar's ladder is viewport-keyed (<code>xl/lg/md/700</code>) while its content is <i>value</i>-keyed: whether the strip fits depends on how long this window's branch and fab line are, not on how wide the window is. The project already has two measured folds that solve exactly this: the top bar's crumb collapse (<code>ResizeObserver</code> + a hidden probe row, <code>top-bar.tsx</code>) and the gui tile's header toolbar (<code>lib/gui-toolbar-fold.ts</code> — a priority ladder with a two-pass reserve and an overflow menu). The proposal reuses the gui fold's shape for the bar:</p>
+<ul>
+  <li><b>Every segment renders at natural width or not at all.</b> Truncation is reserved for the single lowest-priority survivor when even the fold cannot make room (the top-bar crumb rule), so the branch, the PR, and the identity fragments are always either complete or in the <code>…</code> menu — never <code>runK…</code>.</li>
+  <li><b>Fold order (dies first → last)</b>, one list across both clusters so the two sides stop competing: <code>ld</code> → <code>⌘K</code> · <code>a▏</code> hints → <code>cwd</code> → <code>tmx</code> → <code>◷</code> next-fire → <code>server</code> (the top-bar breadcrumb carries it) → <code>cpu · mem</code> → <code>version</code> → <code>agt</code> → <code>⑂</code> branch (when it equals the change branch: the fab id + the folded branch are one identity) → <code>host</code> → <code>fab</code> slug (already gone when the branch carries it) → <b>never</b>: <code>pr</code>, <code>fab</code> id · stage · state, the stale <code>◷</code>, the connection dot.</li>
+  <li><b>The <code>…</code> menu is the fold's overflow</b>, listing exactly the folded segments in strip order with the same copy/open actions — the existing menu, fed by the fold state instead of inverse breakpoint classes. Display order in the strip stays branch-first (decided); only the <i>survival</i> order changes from "rightmost dies first" to the explicit ladder above.</li>
+  <li><b>Collapse-first, reflow-free</b> (the gui fold's rule): the fold state starts collapsed and expands after the first measurement, so the bar never paints a wide frame then snaps. Values that change length every second are already gone from the bar (<code>out</code> left in 499u), so the fold recomputes on window switch and on resize, not on a clock.</li>
+</ul>
+
+<div class="study">
+  <h3>D2 · Live: today's ladder vs. the proposed fold at the same width</h3>
+  <div class="barlab"><b>today</b> <span>breakpoints + proportional truncation</span><span class="w"><span class="wv">1512</span>px</span></div>
+  <div class="barwrap"><div class="bar today-bar" data-today>
+    <div class="cl">
+      <span class="sg"><span class="k">⑂</span><span class="v plain">260913-png4-compose-default-on</span></span>
+      <span class="sg"><span class="k">pr</span><span class="v plain">#971 · <span class="purple">merged</span></span><span class="arrow">↗</span></span>
+      <span class="sg"><span class="k">fab</span><span class="v plain">png4 compose-default-on · review-pr · active</span></span>
+      <span class="sg"><span class="dot"></span><span class="k">agt</span><span class="v plain">active</span></span>
+      <span class="sg bp-lg"><span class="k">tmx</span><span class="v plain">pane 2/1 %107</span></span>
+      <span class="sg bp-xl"><span class="k">cwd</span><span class="v plain">mighty-mammoth</span></span>
+    </div>
+    <div class="cl r">
+      <span class="sg fix bp-md"><span class="k">cpu</span><span class="v plain">2%</span><span class="k">mem</span><span class="v green">14G/59G</span><span class="k bp-lg">ld</span><span class="v plain bp-lg">1%</span></span>
+      <span class="chip bp-xl">◷ in 22m</span>
+      <span class="sg"><span class="v s">runKit</span></span>
+      <span class="sg"><span class="v s">dev-ws-sahil02 <span class="plain bp-700">v3.19.61</span></span></span>
+      <span class="chip bp-xl">⌘K</span>
+      <span class="chip on bp-xl">a▏</span>
+      <span class="chip ovf">…</span>
+      <span class="cdot"></span>
+    </div>
+  </div></div>
+
+  <div class="barlab"><b>proposed</b> <span>measured priority fold · slug once · <code>tmx %id</code> · <code>mem</code> as percent · version its own segment</span><span class="w"><span class="wv">1512</span>px</span></div>
+  <div class="barwrap"><div class="bar" id="foldBar"></div></div>
+  <div class="folded" id="foldList"></div>
+
+  <div class="barlab"><b>proposed, PANE section on</b> <span>the left cluster yields to the panel (§ D4) — toggle it in the toolbar</span><span class="w"><span class="wv">1512</span>px</span></div>
+  <div class="barwrap"><div class="bar" id="foldBarPanel"></div></div>
+  <div class="folded" id="foldListPanel"></div>
+  <div class="cap">The fold runs for real in this page: segments are measured with their natural widths and dropped in the ladder order until the row fits. Drag the slider down to ~900 px and compare which bar still reads. In the "today" bar the visible truncation is the browser's, not hand-drawn.</div>
+</div>
+
+<h3>D3 · Segment diet (independent of the fold)</h3>
+<table>
+  <tr><th>Segment</th><th>Today</th><th>Proposed</th><th>Saved</th><th>Why</th></tr>
+  <tr><td><code>fab</code></td><td><code>fab png4 compose-default-on · review-pr · active</code></td><td><code>fab png4 · review-pr · active</code></td><td class="n">19</td><td>Slug once (§ C1 d); shared resolver, so the panel and card change with it.</td></tr>
+  <tr><td><code>tmx</code></td><td><code>tmx pane 2/1 %107</code></td><td><code>tmx %107</code> (<code>%107 · 2/3</code> multi-pane)</td><td class="n">9</td><td>Fixes the off-by-one; the id is the copy value and the thing typed into tmux.</td></tr>
+  <tr><td><code>agt</code></td><td><code>● agt active</code></td><td><code>agt active</code></td><td class="n">2 + 12 px</td><td>The dot is the sidebar's and the PANE header's; the bar mirrors <i>rows</i>, and no row carries the dot. Optional — smallest win here.</td></tr>
+  <tr><td>metrics</td><td><code>cpu 2% mem 14G/59G ld 1%</code></td><td><code>cpu 2% · mem 24%</code>, <code>ld</code> in the flyout (and the fold's first casualty)</td><td class="n">8–13</td><td>A glance wants a percentage in gauge colour; absolute GB and load already live in the hover flyout's shared <code>HostMetrics</code>.</td></tr>
+  <tr><td>host · version</td><td>one span, truncates together</td><td>two segments, version folds by priority</td><td class="n">—</td><td>Makes the DOM match the documented ladder; the version stops vanishing silently. <span class="tag bug">bug</span></td></tr>
+  <tr><td>server</td><td><code>runKit</code> always</td><td>folds early; the breadcrumb + the sidebar group header carry it</td><td class="n">6</td><td>Fourth copy of the server name in view. <code>Copy: Server Name</code> keeps palette parity.</td></tr>
+  <tr><td><code>⌘K</code> · <code>a▏</code></td><td>chips, drop below xl</td><td>unchanged, fold first</td><td class="n">—</td><td>Constitution V wants the palette discoverable; they are the cheapest segments to fold.</td></tr>
+</table>
+
+<h3>D4 · When the PANE section is on, the bar's window cluster yields</h3>
+<p>The bar's left cluster exists because the desktop PANE panel was retired; the panel is opt-in so the bar can be the only copy. The missing half of that contract: <b>when a desktop viewer opts the panel back in, the bar hands the window registers back to it</b> and keeps only the host cluster (plus the never-drop <code>pr</code> segment — the one register with an action the panel does not sit next to). One prop seam: <code>Shell</code> already knows <code>showPane</code> from the section-visibility rail; it passes <code>window={null}</code> to <code>StatusBar</code> when the panel is visible on desktop. The user then has two coherent modes instead of two half-truncated copies:</p>
+<ul>
+  <li><b>Panel off</b> (default): the bar is the compact register view, folded to fit.</li>
+  <li><b>Panel on</b>: the sidebar is the register view with continuation lines; the bar is host chrome. The left half of the bar goes quiet, and the right cluster stops folding at all normal widths.</li>
+</ul>
+<p>Toggle <b>PANE section on</b> in the toolbar to see the third bar in § D2 switch between the two.</p>
+
+<h3>D5 · Three stacked bars</h3>
+<p>Above the compose strip sits the tmux status line — a window list the sidebar already renders, plus a session name and a clock. It is tmux's chrome, not ours, and the drawer study parked hiding it for the operator session (row 6, "session-wide side effect": <code>status</code> is a session option, so a local <code>tmux attach</code> to the same session loses the bar too). The same trade generalises: <b>a <code>tmux.status</code> setting (<code>on</code> default · <code>off</code>) applied through the managed tmux.conf to <code>@rk_srv_managed</code> servers</b> would remove the third bar for people who only ever view through the web. It stays <span class="tag park">parked</span> here as well: it is outside the two surfaces the study was asked about, and it is a per-user preference rather than a density fix. Noted because the eye counts it.</p>
+
+<h2>E · Filmstrip — the proposed fold at five widths</h2>
+<p>Static frames rendered by the same fold algorithm (PANE section off). At 900 px the bar still shows the branch, the PR, and the fab state whole; today's bar at 900 px shows six ellipses.</p>
+<div class="strip5" id="strip5"></div>
+
+<h2>F · Recommendation &amp; sequencing</h2>
+<p><b>Four fab changes plus one parked item.</b> 0 is bug fixes and can land alone; 1 is the value diet through the shared resolver and touches all three register surfaces at once, so it goes before the fold; 2 is the fold; 3 is the panel/bar yield plus continuation lines. 1 and 2 are file-disjoint enough to run in parallel once 0 is in.</p>
+<table>
+  <tr><th>#</th><th>Change</th><th>Verdict</th><th>Touches</th></tr>
+  <tr><td>0</td><td><code>tmx</code> off-by-one under <code>pane-base-index 1</code> (render tmux's index verbatim); version out of the host span so it folds instead of truncating</td><td><span class="tag rec">ship first</span> <span class="tag bug">bugs</span></td><td><code>status-panel.tsx</code>, <code>status-bar.tsx</code> (WindowCluster + OverflowMenu), their unit tests; memory § Status Bar ladder sentence</td></tr>
+  <tr><td>1</td><td>Register value diet: <code>getFabLine</code> drops the slug when the branch carries it (+ fab-hue on <code>displayState</code>); <code>tmx</code> = <code>%id[ · n/m]</code>; <code>out</code> = <code>&lt;cmd&gt; · flowing | idle Xm</code>; <code>cwd</code> basename-first with a yielding parent; dim date prefix on <code>git</code></td><td><span class="tag rec">change 1</span> light</td><td><code>sidebar/registers.ts</code> (+ a <code>branch</code> argument), <code>status-panel.tsx</code>, <code>row-flyout-card.tsx</code>, <code>status-bar.tsx</code>, e2e <code>status-bar.spec.ts</code> / pane-panel assertions; spec § Row Minimalism example strings; memory § Pane panel five-register view</td></tr>
+  <tr><td>2</td><td>Status bar measured priority fold: one ladder across both clusters, natural-width-or-folded, the <code>…</code> menu fed by fold state, <code>cpu · mem</code> as percents with <code>ld</code> in the flyout, server folds early</td><td><span class="tag rec">change 2</span> the big one</td><td>a <code>lib/status-bar-fold.ts</code> generalised from <code>lib/gui-toolbar-fold.ts</code> (or the gui module made generic), <code>status-bar.tsx</code> probe row + <code>ResizeObserver</code>, unit tests replacing the breakpoint tests, e2e width sweep; memory § Status Bar (ladder → fold), the three decision records that name breakpoints</td></tr>
+  <tr><td>3</td><td>PANE-on ⇒ the bar's window cluster yields (keeps <code>pr</code>); continuation lines for <code>pr</code> / <code>fab</code> in the panel</td><td><span class="tag rec">change 3</span> small</td><td><code>Shell</code> → <code>StatusBar window</code> prop gate, <code>status-panel.tsx</code> two-line rows, tests; memory § Collapsible Panels + § Status Bar</td></tr>
+  <tr><td>4</td><td><code>tmux.status</code> setting hiding the tmux status line on rk-managed servers</td><td><span class="tag park">parked</span> outside scope; session-wide</td><td>settings registry (16 → 17 keys), managed tmux.conf, doctor</td></tr>
+</table>
+
+<h3>Rejected</h3>
+<ul>
+  <li><b>Collapse the five registers into one status line</b> in the panel or the bar. Spec § Row Minimalism (decided): the dot must be derivable from the rows; a single line re-creates the "what does this dot mean" problem the registers solved.</li>
+  <li><b>A settings surface for which bar segments show.</b> Constitution IV allows one registry-driven settings surface and VII prefers convention; a priority fold is the convention. A per-segment picker is the kind of configuration the fold makes unnecessary.</li>
+  <li><b>Horizontal scroll or a two-row bar.</b> The ladder's own rule — never scroll — and a 24 px VS-Code-class strip is the frame; two rows is a panel, and the panel exists.</li>
+  <li><b>Drop the <code>git</code> row from the panel when the branch equals the change.</b> Cheaper than the slug rule, but it takes away the one row people copy most (the branch) and turns a status surface into an inference exercise. Dimming the date prefix and moving the slug out of <code>fab</code> keeps the copy target and still writes the slug once.</li>
+  <li><b>Hide the bar's left cluster whenever the sidebar is open.</b> Too aggressive: the default desktop has the sidebar open and the panel off, and the bar is then the only register view. The yield is keyed to the PANE section, not the sidebar.</li>
+  <li><b>Rename the agent-state vocabulary</b> (<code>active</code> → <code>working</code>) to break the triple "active". The values are written by the harness hooks and read cross-repo (<code>agent-state.md</code>); the L0 word is ours to change, the L1 word is not.</li>
+</ul>
+
+<script>
+(function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  // ---------- toolbar ----------
+  const tLight = $('#tLight'), tPanel = $('#tPanel'), wRange = $('#wRange'), wVal = $('#wVal');
+  tLight.addEventListener('click', () => { document.body.classList.toggle('light'); tLight.classList.toggle('on'); renderAll(); });
+  tPanel.addEventListener('click', () => { tPanel.classList.toggle('on'); renderAll(); });
+  wRange.addEventListener('input', renderAll);
+
+  // ---------- "today" bars: breakpoint classes simulated from the slider ----------
+  function applyToday(width) {
+    $$('.today-bar').forEach(bar => {
+      bar.style.width = width + 'px';
+      $$('.bp-xl', bar).forEach(el => el.style.display = width >= 1280 ? '' : 'none');
+      $$('.bp-lg', bar).forEach(el => el.style.display = width >= 1024 ? '' : 'none');
+      $$('.bp-md', bar).forEach(el => el.style.display = width >= 768 ? '' : 'none');
+      $$('.bp-700', bar).forEach(el => el.style.display = width >= 700 ? '' : 'none');
+      $$('.ovf', bar).forEach(el => el.style.display = width >= 1280 ? 'none' : '');
+    });
+  }
+
+  // ---------- proposed fold ----------
+  // Segments in DISPLAY order; `prio` is the fold order (lower dies first). null prio = never folds.
+  const SEGS = (panelOn) => {
+    const left = panelOn ? [
+      { id: 'pr', prio: null, html: '<span class="sg"><span class="k">pr</span><span class="v plain">#971 · <span class="purple">merged</span></span><span class="arrow">↗</span></span>' },
+    ] : [
+      { id: 'git', prio: 9, html: '<span class="sg"><span class="k">⑂</span><span class="v plain">260913-png4-compose-default-on</span></span>' },
+      { id: 'pr', prio: null, html: '<span class="sg"><span class="k">pr</span><span class="v plain">#971 · <span class="purple">merged</span></span><span class="arrow">↗</span></span>' },
+      { id: 'fab', prio: null, html: '<span class="sg"><span class="k">fab</span><span class="v plain">png4 · review-pr · <span class="green">active</span></span></span>' },
+      { id: 'agt', prio: 8, html: '<span class="sg"><span class="k">agt</span><span class="v plain">active</span></span>' },
+      { id: 'tmx', prio: 3, html: '<span class="sg"><span class="k">tmx</span><span class="v plain">%107</span></span>' },
+      { id: 'cwd', prio: 2, html: '<span class="sg"><span class="k">cwd</span><span class="v plain">mighty-mammoth</span></span>' },
+    ];
+    const right = [
+      { id: 'cpu · mem', prio: 6, html: '<span class="sg fix"><span class="k">cpu</span><span class="v plain">2%</span><span class="k">·</span><span class="k">mem</span><span class="v green">24%</span></span>' },
+      { id: 'ld', prio: 0, html: '<span class="sg fix"><span class="k">ld</span><span class="v plain">1%</span></span>' },
+      { id: '◷ next', prio: 4, html: '<span class="chip">◷ in 22m</span>' },
+      { id: 'server', prio: 5, html: '<span class="sg fix"><span class="v s">runKit</span></span>' },
+      { id: 'host', prio: 10, html: '<span class="sg fix"><span class="v s">dev-ws-sahil02</span></span>' },
+      { id: 'version', prio: 7, html: '<span class="sg fix"><span class="v plain">v3.19.61</span></span>' },
+      { id: '⌘K', prio: 1, html: '<span class="chip">⌘K</span>' },
+      { id: 'a▏', prio: 1, html: '<span class="chip on">a▏</span>' },
+    ];
+    return { left, right };
+  };
+
+  const GAP = 12, PAD = 16, OVF_W = 22, DOT_W = 8;
+
+  // Measure a segment's natural width by rendering it once in a probe bar.
+  const probe = document.createElement('div');
+  probe.className = 'bar'; probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:auto;overflow:visible;';
+  document.body.appendChild(probe);
+  function measure(html) {
+    probe.innerHTML = html;
+    return probe.firstElementChild.getBoundingClientRect().width;
+  }
+
+  function computeFold(width, panelOn) {
+    const { left, right } = SEGS(panelOn);
+    const all = [...left.map(s => ({ ...s, side: 'l' })), ...right.map(s => ({ ...s, side: 'r' }))];
+    all.forEach(s => { s.w = measure(s.html); s.on = true; });
+    const fits = () => {
+      const on = all.filter(s => s.on);
+      const anyFolded = all.some(s => !s.on);
+      const chrome = PAD + DOT_W + GAP + (anyFolded ? OVF_W + GAP : 0);
+      const content = on.reduce((a, s) => a + s.w, 0) + Math.max(0, on.length - 1) * GAP;
+      return chrome + content <= width;
+    };
+    while (!fits()) {
+      const cand = all.filter(s => s.on && s.prio !== null).sort((a, b) => a.prio - b.prio)[0];
+      if (!cand) break;
+      cand.on = false;
+    }
+    return all;
+  }
+
+  function renderFold(barEl, listEl, width, panelOn) {
+    barEl.style.width = width + 'px';
+    const segs = computeFold(width, panelOn);
+    const anyFolded = segs.some(s => !s.on);
+    const html = (side) => segs.filter(s => s.side === side && s.on).map(s => s.html).join('');
+    barEl.innerHTML =
+      '<div class="cl">' + html('l') + '</div>' +
+      '<div class="cl r">' + html('r') + (anyFolded ? '<span class="chip">…</span>' : '') + '<span class="cdot"></span></div>';
+    if (listEl) {
+      const folded = segs.filter(s => !s.on).map(s => s.id);
+      listEl.innerHTML = folded.length ? '<b>…</b> menu: ' + folded.join(' · ') : '<b>…</b> menu: nothing folded';
+    }
+    return segs;
+  }
+
+  // ---------- filmstrip ----------
+  function renderStrip() {
+    const host = $('#strip5'); host.innerHTML = '';
+    [1512, 1280, 1100, 900, 700].forEach(w => {
+      const lab = document.createElement('div'); lab.className = 'barlab';
+      lab.innerHTML = '<b>' + w + ' px</b>';
+      const wrap = document.createElement('div'); wrap.className = 'barwrap';
+      const bar = document.createElement('div'); bar.className = 'bar'; wrap.appendChild(bar);
+      const list = document.createElement('div'); list.className = 'folded';
+      host.appendChild(lab); host.appendChild(wrap); host.appendChild(list);
+      renderFold(bar, list, w, false);
+    });
+  }
+
+  function renderAll() {
+    const width = +wRange.value;
+    wVal.textContent = width;
+    $$('.wv').forEach(el => el.textContent = width);
+    applyToday(width);
+    renderFold($('#foldBar'), $('#foldList'), width, false);
+    renderFold($('#foldBarPanel'), $('#foldListPanel'), width, tPanel.classList.contains('on'));
+  }
+
+  renderAll();
+  renderStrip();
+})();
+</script>
+</body>
+</html>
