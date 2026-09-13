@@ -382,16 +382,11 @@ export function PasteGlyph() {
 export function SendKeyGlyph() {
   return (
     <ControlGlyph name="send-key">
-      <rect width="20" height="16" x="2" y="4" rx="2" />
-      <path d="M6 8h.01" />
-      <path d="M10 8h.01" />
-      <path d="M14 8h.01" />
-      <path d="M18 8h.01" />
-      <path d="M6 12h.01" />
-      <path d="M10 12h.01" />
-      <path d="M14 12h.01" />
-      <path d="M18 12h.01" />
-      <path d="M7 16h10" />
+      {/* The ⌥ option symbol: this sends ONE modifier chord to the guest. A
+          keyboard silhouette reads as "the keyboard" and is indistinguishable
+          from a keyboard glyph at the rendered 14px. */}
+      <path d="M4 17 12 7h8" />
+      <path d="M4 7h4" />
     </ControlGlyph>
   );
 }
@@ -460,38 +455,3 @@ export function FullscreenGlyph() {
   );
 }
 
-/** Zoom in (gui header fold) — the lucide zoom-in magnifier. */
-export function ZoomInGlyph() {
-  return (
-    <ControlGlyph name="zoom-in">
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-      <path d="M11 8v6" />
-      <path d="M8 11h6" />
-    </ControlGlyph>
-  );
-}
-
-/** Zoom out (gui header fold) — the lucide zoom-out magnifier. */
-export function ZoomOutGlyph() {
-  return (
-    <ControlGlyph name="zoom-out">
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-      <path d="M8 11h6" />
-    </ControlGlyph>
-  );
-}
-
-/** Zoom to fit (gui header fold) — the magnifier carrying a small frame (the
- *  trio stays one family; the plain corner brackets would collide with the
- *  tile-expand ZoomGlyph). */
-export function ZoomFitGlyph() {
-  return (
-    <ControlGlyph name="zoom-fit">
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-      <rect x="8.5" y="8.5" width="5" height="5" rx="0.5" />
-    </ControlGlyph>
-  );
-}

@@ -20,7 +20,7 @@
  * ever renders.
  *
  * Grouping: FOUR groups (size ┆ zoom ┆ quality ┆ the six action glyphs) with
- * THREE hairline dividers, items FLUSH at gap 0 — the header's flush-segment
+ * THREE hairline dividers, items separated by 2px (`mx-[1px]` a side) — the
  * idiom; the dividers carry all separation at the shipped
  * `mx-0.5 h-3.5 w-px bg-border` spec. Verb boxes stay 24×24 (26 coarse), so
  * WCAG 2.2 SC 2.5.8 is untouched. Chrome is the header's vocabulary, not the
@@ -70,9 +70,6 @@ import {
   SendKeyGlyph,
   StatsGlyph,
   TerminalGlyph,
-  ZoomFitGlyph,
-  ZoomInGlyph,
-  ZoomOutGlyph,
 } from "./top-bar-icons";
 import { useKeybindings } from "@/hooks/use-keybindings";
 import { formatCombo } from "@/lib/keybindings";
@@ -82,12 +79,12 @@ import { formatCombo } from "@/lib/keybindings";
  *  fold cluster renders INSIDE that header, so the pair MUST change
  *  together. */
 const HEADER_VERB_BASE =
-  "inline-flex items-center justify-center h-[24px] w-[24px] coarse:h-[26px] coarse:w-[26px] rounded transition-colors";
+  "inline-flex items-center justify-center h-[24px] w-[24px] coarse:h-[26px] coarse:w-[26px] mx-[1px] rounded transition-colors";
 const HEADER_VERB_CLASS = `${HEADER_VERB_BASE} hover:bg-bg-inset hover:text-text-primary`;
 /** The text chips (size, quality): borderless, content-width, 6px side
  *  padding on the same height axis. */
 const HEADER_CHIP_CLASS =
-  "inline-flex items-center h-[24px] coarse:h-[26px] px-1.5 rounded transition-colors hover:bg-bg-inset hover:text-text-primary";
+  "inline-flex items-center h-[24px] coarse:h-[26px] mx-[1px] px-1.5 rounded transition-colors hover:bg-bg-inset hover:text-text-primary";
 /** The shipped group divider (D11) — 2px side margins, a 14px hairline. */
 const HEADER_DIVIDER_CLASS = "mx-0.5 h-3.5 w-px bg-border";
 
@@ -322,14 +319,15 @@ export function GuiToolbar({
         const row = item.id === "zoom-out" ? zoomOutRow : item.id === "zoom-fit" ? zoomFitRow : zoomInRow;
         const label =
           item.id === "zoom-out" ? "Zoom out" : item.id === "zoom-fit" ? "Zoom to fit" : "Zoom in";
-        const glyph =
-          item.id === "zoom-out" ? (
-            <ZoomOutGlyph />
-          ) : item.id === "zoom-fit" ? (
-            <ZoomFitGlyph />
-          ) : (
-            <ZoomInGlyph />
-          );
+        // The zoom trio stays LEXICAL — `− fit +` reads as one stepper, which
+        // magnifier glyphs break: two near-identical lenses either side of a
+        // word, where the SIGN is the whole message. `fit` names a mode, not a
+        // direction.
+        const glyph = (
+          <span className="text-[11px] leading-none">
+            {item.id === "zoom-out" ? "−" : item.id === "zoom-fit" ? "fit" : "+"}
+          </span>
+        );
         const button = (
           <button
             key={item.id}
@@ -449,7 +447,11 @@ export function GuiToolbar({
     <div
       ref={rootRef}
       data-testid="gui-toolbar"
-      className="relative flex-1 min-w-0 flex items-center justify-end text-text-secondary"
+      // -mr-1.5 cancels the tile header's own gap-1.5 (6px) on this ONE seam.
+      // The cluster's internal rhythm is 2px (mx-[1px] a side), so an
+      // un-cancelled header gap leaves the pinned block's right seam wider
+      // than its left. Every other major part keeps the header's 6px.
+      className="relative flex-1 min-w-0 -mr-1.5 flex items-center justify-end text-text-secondary"
     >
       <TipGroup>
         {visibleItems.map((item, i) => {
