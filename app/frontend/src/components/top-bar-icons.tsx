@@ -382,9 +382,9 @@ export function PasteGlyph() {
 export function SendKeyGlyph() {
   return (
     <ControlGlyph name="send-key">
-      {/* The ⌥ option symbol: this sends ONE modifier chord to the guest. A
-          keyboard silhouette reads as "the keyboard" and is indistinguishable
-          from a keyboard glyph at the rendered 14px. */}
+      {/* The ⌥ option symbol the pill carried here — a modifier chord, not a
+          keyboard. A keyboard silhouette is indistinguishable from
+          KeyboardGlyph (capture) at the rendered 14px. */}
       <path d="M4 17 12 7h8" />
       <path d="M4 7h4" />
     </ControlGlyph>
@@ -455,3 +455,19 @@ export function FullscreenGlyph() {
   );
 }
 
+/** Keyboard (the gui header's capture verb) — a rounded case with two dot
+ *  key rows and a dot · spacebar · dot bottom row symmetric about x=12, all
+ *  three rows on one grid (the dots sit under the outer keys of the first
+ *  row). */
+export function KeyboardGlyph() {
+  return (
+    <ControlGlyph name="keyboard">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01" />
+      <path d="M8 12h.01M12 12h.01M16 12h.01" />
+      <path d="M6 16h.01" />
+      <path d="M9 16h6" />
+      <path d="M18 16h.01" />
+    </ControlGlyph>
+  );
+}

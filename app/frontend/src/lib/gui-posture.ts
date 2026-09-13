@@ -21,7 +21,10 @@
  * the stats overlay's visibility (`rk-gui-stats-visible`: "1" = shown,
  * absent = hidden — the lock's shape), and the header fold panel's open
  * state (`rk-gui-toolbar`: "1" = open, absent/other = closed — an overflow
- * panel's rest state is closed). Reads are validated on the way in
+ * panel's rest state is closed), and the keyboard-capture latch
+ * (`rk-gui-capture`: "1" = captured, absent/other = released — while latched
+ * the gui chord gate hands every chord but the release binding to the guest
+ * desktop). Reads are validated on the way in
  * (untrusted-localStorage discipline); all writes are try/catch-noop.
  */
 
@@ -66,6 +69,7 @@ const GUI_STATS_VISIBLE_KEY = "rk-gui-stats-visible";
 const GUI_HIDPI_KEY = "rk-gui-hidpi";
 const GUI_KEYBAR_KEY = "rk-gui-keybar";
 const GUI_TOOLBAR_KEY = "rk-gui-toolbar";
+const GUI_CAPTURE_KEY = "rk-gui-capture";
 const GUI_WM_STRIP_DISMISSED_KEY = "runkit-gui-wm-strip-dismissed";
 
 /** Retired `rk-gui-view` key; read once to seed the zoom posture, removed on write. */
@@ -278,6 +282,26 @@ export function writeGuiToolbarVisible(visible: boolean): void {
       localStorage.setItem(GUI_TOOLBAR_KEY, "1");
     } else {
       localStorage.removeItem(GUI_TOOLBAR_KEY);
+    }
+  } catch {
+    /* noop — best-effort persistence */
+  }
+}
+
+export function readGuiCapture(): boolean {
+  try {
+    return localStorage.getItem(GUI_CAPTURE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeGuiCapture(on: boolean): void {
+  try {
+    if (on) {
+      localStorage.setItem(GUI_CAPTURE_KEY, "1");
+    } else {
+      localStorage.removeItem(GUI_CAPTURE_KEY);
     }
   } catch {
     /* noop — best-effort persistence */

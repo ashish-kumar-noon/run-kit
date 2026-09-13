@@ -1857,6 +1857,8 @@ describe("TopBar", () => {
       onSendKey: vi.fn(),
       onOpenLogs: vi.fn(),
       onReconnect: vi.fn(),
+      capture: false,
+      onCaptureChange: vi.fn(),
       ...overrides,
     });
     const switchToggles = (active: SurfaceKind) => ({

@@ -24,6 +24,8 @@ import {
   writeGuiKeyBarVisible,
   readGuiToolbarVisible,
   writeGuiToolbarVisible,
+  readGuiCapture,
+  writeGuiCapture,
   zoomedHostSize,
 } from "./gui-posture";
 
@@ -410,5 +412,39 @@ describe("nextGuiQuality (the ◐ quality cycle)", () => {
 
   it("labels every preset", () => {
     for (const q of GUI_QUALITY_ORDER) expect(GUI_QUALITY_LABELS[q]).toMatch(/^[A-Z]/);
+  });
+});
+
+describe("gui keyboard capture latch (rk-gui-capture)", () => {
+  it("defaults to released when absent", () => {
+    expect(readGuiCapture()).toBe(false);
+  });
+
+  it("round-trips the flag; releasing removes the key", () => {
+    writeGuiCapture(true);
+    expect(readGuiCapture()).toBe(true);
+    expect(localStorage.getItem("rk-gui-capture")).toBe("1");
+    writeGuiCapture(false);
+    expect(readGuiCapture()).toBe(false);
+    expect(localStorage.getItem("rk-gui-capture")).toBeNull();
+  });
+
+  it("reads a stray non-'1' value as released", () => {
+    localStorage.setItem("rk-gui-capture", "yes");
+    expect(readGuiCapture()).toBe(false);
+  });
+
+  it("swallows a localStorage read failure, returning released", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    expect(readGuiCapture()).toBe(false);
+  });
+
+  it("swallows a localStorage write failure silently", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    expect(() => writeGuiCapture(true)).not.toThrow();
   });
 });

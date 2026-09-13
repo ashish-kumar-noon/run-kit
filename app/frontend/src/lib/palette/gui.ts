@@ -82,6 +82,15 @@
  *                                 fixed geometry the pins are inert: the row
  *                                 renders DISABLED with the fixed-size
  *                                 description rather than disappearing.
+ *  - `GUI: Capture keyboard` / `GUI: Release keyboard` — gui tile open, fine
+ *                                 pointer only (touch input never reaches the
+ *                                 chord gate the toggle governs); ONE
+ *                                 state-labelled row with the stable id
+ *                                 `gui-capture-toggle` (the registry
+ *                                 actionId), so `withShortcutHints` decorates
+ *                                 the release chord. Toggles the
+ *                                 viewer-local `rk-gui-capture` posture via
+ *                                 onCaptureChange.
  *  - `GUI: Open supervisor logs` — switch ON; navigates to the rk-gui
  *                                 session's host window. When the supervisor
  *                                 session is absent the row renders DISABLED
@@ -147,6 +156,8 @@ export type GuiPaletteInput = {
   keyBarVisible: boolean;
   /** The viewer's toolbar fold-panel state (`rk-gui-toolbar`). */
   toolbarVisible: boolean;
+  /** The viewer's keyboard-capture latch (`rk-gui-capture`). */
+  capture: boolean;
   /** The host signal's `geometry` — the `gui.geometry` setting: a fixed `WxH`,
    *  or `auto` (the desktop follows the focused fine-pointer viewer). */
   geometry: string;
@@ -176,6 +187,7 @@ export type GuiPaletteInput = {
   onHidpiChange: (on: boolean) => void;
   onKeyBarVisibleChange: (visible: boolean) => void;
   onToolbarVisibleChange: (visible: boolean) => void;
+  onCaptureChange: (on: boolean) => void;
   /** Opens the Send key prompt (the caller owns the dialog). */
   onSendKey: () => void;
   onOpenLogs: () => void;
@@ -358,6 +370,15 @@ export function buildGuiActions(input: GuiPaletteInput): GuiPaletteAction[] {
           ? { id: "gui-unlock", label: "GUI: Unlock resolution", ...fixedPin, onSelect: () => input.onLockChange(false) }
           : { id: "gui-lock", label: "GUI: Lock resolution", ...fixedPin, onSelect: () => input.onLockChange(true) },
       );
+      // ONE state-labelled row (not a destination-only pair): the id IS the
+      // registry actionId, so `withShortcutHints` decorates the release
+      // chord — a show/hide pair would leave both rows keycap-less.
+      actions.push({
+        id: "gui-capture-toggle",
+        label: input.capture ? "GUI: Release keyboard" : "GUI: Capture keyboard",
+        description: "hand every chord to the guest desktop",
+        onSelect: () => input.onCaptureChange(!input.capture),
+      });
     }
     // Destination-only pair — the ⚙ fold panel's open state (the
     // `rk-gui-toolbar` posture), like the key-bar pair above.

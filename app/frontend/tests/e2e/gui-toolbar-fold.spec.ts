@@ -20,7 +20,11 @@ import { GUI_ON_1080P, mockGuiBackend, toggleButton } from "./_gui-mock";
 // iterates viewport resizes until the spring hits a computed target (the
 // header's shrinkable meta chip makes the viewport↔spring overhead
 // non-constant), and `measureFold` reads the hidden probe row's REAL widths,
-// so fold targets are computed from measurement, never hardcoded.
+// so fold targets are computed from measurement, never hardcoded. The pinned
+// block's permanent capture verb (fine pointers) is reserved from the spring
+// BEFORE the ladder is fitted, so every spring target below adds the probe's
+// `capture` width back in (`+ cap`) — the ladder arithmetic itself is
+// unchanged.
 
 /** The probe's measured widths (data-fold keyed), the spring's clientWidth,
  *  and the viewport width — the fold's three real inputs. */
@@ -114,15 +118,16 @@ test.describe("gui header fold — real widths", () => {
    * Proves: the fold consumes the ladder from the TAIL — health (∿/↻) folds
    * first, the size chip never does at these widths — the `⚙` pinned block
    * appears exactly when something folds and disappears when everything fits
-   * again, and the panel carries the folded rungs' palette rows.
+   * again, the panel carries the folded rungs' palette rows, and the pinned
+   * capture verb stays visible at EVERY width (it never folds).
    *
    * Steps:
    * 1. Mock the reachable 1080p entry; open the gui tile in the split;
    *    measure the probe; widen the viewport until the spring fits the full
-   *    ladder; assert the full cluster inline and no `⚙`.
+   *    ladder; assert the full cluster inline, no `⚙`, capture verb visible.
    * 2. Resize so the spring lands just below the fully-degraded width; assert
-   *    (retrying) that Toggle stats and Reconnect fold, ⚙ appears, and the
-   *    size chip stays inline.
+   *    (retrying) that Toggle stats and Reconnect fold, ⚙ appears, the size
+   *    chip stays inline, and the capture verb still renders.
    * 3. Widen back to the full-fit width; assert the cluster is restored and
    *    ⚙ is gone.
    * 4. Narrow again, open ⚙; assert the panel lists the folded rungs' rows.
@@ -134,31 +139,35 @@ test.describe("gui header fold — real widths", () => {
     const cluster = await openGuiTileSplit(page);
 
     const { widths } = await measureFold(page);
+    const cap = widths.capture ?? 0;
     const full = ladderWidth(widths, LADDER.length, LADDER.length);
     const degradedAll = ladderWidth(widths, LADDER.length, 0);
     // Widen until everything fits (the header's meta chip eats spring width,
     // so the default 1280 split already folds the tail).
-    await resizeToSpring(page, full + 40);
+    await resizeToSpring(page, full + cap + 40);
     await expect(cluster.getByRole("button", { name: "Toggle stats" })).toBeVisible();
     await expect(cluster.getByRole("button", { name: "Reconnect" })).toBeVisible();
     await expect(cluster.getByTestId("gui-toolbar-overflow")).toHaveCount(0);
+    // The capture verb is pinned: visible at every width, folded or not.
+    await expect(cluster.getByTestId("gui-capture-toggle")).toBeVisible();
     // Just below the fully-degraded width: pass 1 folds reconnect, the
     // reserve (pass 2) folds stats with it.
-    await resizeToSpring(page, degradedAll - 10);
+    await resizeToSpring(page, degradedAll + cap - 10);
     await expect(cluster.getByTestId("gui-toolbar-overflow")).toBeVisible();
     await expect(cluster.getByRole("button", { name: "Reconnect" })).toHaveCount(0);
     await expect(cluster.getByRole("button", { name: "Toggle stats" })).toHaveCount(0);
     await expect(cluster.getByTestId("gui-toolbar-resolution")).toBeVisible();
     await expect(cluster.getByRole("button", { name: "Open terminal" })).toBeVisible();
+    await expect(cluster.getByTestId("gui-capture-toggle")).toBeVisible();
 
     // Widening back well past the threshold (hysteresis margin is 24px) —
     // everything returns inline and ⚙ disappears.
-    await resizeToSpring(page, full + 40);
+    await resizeToSpring(page, full + cap + 40);
     await expect(cluster.getByTestId("gui-toolbar-overflow")).toHaveCount(0);
     await expect(cluster.getByRole("button", { name: "Toggle stats" })).toBeVisible();
 
     // Narrow again and open the panel: the folded rungs read as palette rows.
-    await resizeToSpring(page, degradedAll - 10);
+    await resizeToSpring(page, degradedAll + cap - 10);
     const gear = cluster.getByTestId("gui-toolbar-overflow");
     await expect(gear).toBeVisible();
     await gear.click();
@@ -185,19 +194,20 @@ test.describe("gui header fold — real widths", () => {
     await mockGuiBackend(page, GUI_ON_1080P);
     const cluster = await openGuiTileSplit(page);
     const { widths } = await measureFold(page);
+    const cap = widths.capture ?? 0;
     const full = ladderWidth(widths, LADDER.length, LADDER.length);
     const degradedQuality = ladderWidth(widths, LADDER.length, 4);
     const degradedBoth = ladderWidth(widths, LADDER.length, 0);
 
     // [degradedQuality, full): only the quality label pays.
-    await resizeToSpring(page, (degradedQuality + full) / 2);
+    await resizeToSpring(page, (degradedQuality + full) / 2 + cap);
     await expect(cluster.getByRole("button", { name: "Quality" })).toHaveText("◐");
     await expect(cluster.getByTestId("gui-toolbar-resolution")).toHaveText("1920×1080 ▾");
     await expect(cluster.getByRole("button", { name: "Toggle stats" })).toBeVisible();
     await expect(cluster.getByTestId("gui-toolbar-overflow")).toHaveCount(0);
 
     // [degradedBoth, degradedQuality): the size label shortens too.
-    await resizeToSpring(page, (degradedBoth + degradedQuality) / 2);
+    await resizeToSpring(page, (degradedBoth + degradedQuality) / 2 + cap);
     await expect(cluster.getByTestId("gui-toolbar-resolution")).toHaveText("1920 ▾");
     await expect(cluster.getByRole("button", { name: "Quality" })).toHaveText("◐");
     await expect(cluster.getByRole("button", { name: "Toggle stats" })).toBeVisible();
@@ -220,7 +230,7 @@ test.describe("gui header fold — real widths", () => {
     await mockGuiBackend(page, GUI_ON_1080P);
     const cluster = await openGuiTileSplit(page);
     const { widths } = await measureFold(page);
-    const foldedSpring = ladderWidth(widths, LADDER.length, 0) - 10;
+    const foldedSpring = ladderWidth(widths, LADDER.length, 0) + (widths.capture ?? 0) - 10;
 
     await resizeToSpring(page, foldedSpring);
     const gear = cluster.getByTestId("gui-toolbar-overflow");
