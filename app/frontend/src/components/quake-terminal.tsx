@@ -27,6 +27,7 @@ import { entryKey } from "@/store/window-store";
 import { classifyComposeEnter } from "@/lib/compose-keys";
 import { insertTextAtCaret } from "@/lib/readline-keys";
 import { useTextareaAutogrow } from "@/lib/textarea-autogrow";
+import { CRON_ZONE_HASH } from "@/components/server-watched-zone/cron-zone";
 import {
   QUAKE_TERMINAL_EVENT,
   attachOperatorFiles,
@@ -107,7 +108,10 @@ const NO_OPERATOR_HINT = "no operator on this server — run rk operator";
  * a terminal route carries the origin window as `?from=` so the operator
  * route's compose strip keeps the templated chat lane behind its context
  * chip. A request against an operator-less server toasts the hint and stays
- * put. The component still mounts on mobile (the seam listener lives here)
+ * put — except a cron-segment request (`list`/`log`) on a server whose
+ * sessions have loaded: cron needs no operator, so it navigates to the tmux
+ * Server page's Cron section (`/$server#cron`) instead. The component still
+ * mounts on mobile (the seam listener lives here)
  * but renders nothing; a desktop→mobile viewport flip resets the machine to
  * rest and tears down any in-flight slide state, so no effect or frame
  * survives the gate.
@@ -234,7 +238,7 @@ export function QuakeTerminal() {
   const toast = useOptionalToast();
   const noOperatorHintAtRef = useRef(0);
 
-  const { servers, sessionsByServer } = useSessionContext();
+  const { servers, sessionsByServer, isConnectedByServer } = useSessionContext();
 
   // Route server — the shared deepest-first route-param walk (param names are
   // unique across the route tree).
@@ -422,13 +426,25 @@ export function QuakeTerminal() {
   // request carrying any non-terminal `segment` maps to the route's
   // `?tab=<segment>` search param (merged with `?from=` on a cross-route
   // navigation). An operator-less server toasts the hint (throttled to one
-  // per toast lifetime) without navigating. Held in a ref so the
-  // once-registered seam listener below always reads current-render values.
+  // per toast lifetime) without navigating — EXCEPT for the cron segments:
+  // cron needs no operator, so `list`/`log` land on the tmux Server page's
+  // Cron section (`/$server#cron`, the phone's operator-less cron home)
+  // instead. Held in a ref so the once-registered seam listener below always
+  // reads current-render values.
   const mobileRequestRef = useRef<(detail: QuakeTerminalRequest) => void>(() => {});
   mobileRequestRef.current = (detail) => {
     const srv =
       detail.server ?? resolveQuakeServer(routeServer, serverNames, lastViewedRef.current);
     const tgt = srv ? findOperatorWindow(sessionsByServer.get(srv) ?? []) : undefined;
+    // "No operator" is only knowable once the server's sessions have loaded:
+    // a freshly attached server carries an empty slice before its first
+    // `sessions` event, and treating that as operator-less would route past
+    // an operator that exists. Until then the hint toast (below) answers.
+    const loaded = srv ? isConnectedByServer.get(srv) === true : false;
+    if (srv && loaded && !tgt && (detail.segment === "list" || detail.segment === "log")) {
+      void navigate({ to: "/$server", params: { server: srv }, hash: CRON_ZONE_HASH });
+      return;
+    }
     if (!srv || !tgt) {
       const now = Date.now();
       if (now - noOperatorHintAtRef.current >= NO_OPERATOR_HINT_THROTTLE_MS) {
