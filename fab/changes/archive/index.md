@@ -1,5 +1,99 @@
 # Archived Changes
 
+- **260913-xga4-tab-new-default-session-resolution** — rk tab new — Role-Aware Default Session Resolution
+- **260913-t7vy-operator-daemon-launch-root-kickoff** — rk operator -L — Project-Root Launch Dir and Kickoff Visibility
+- **260913-png4-compose-default-on** — Compose strip on by default — first-render notice, focus on fresh navigation, one name
+- **260913-osy0-e2e-per-worktree-lock** — E2E Harness — Per-Worktree Exclusive Lock Before the Stale-Kill
+- **260913-kl7u-compose-collapse-tongue** — Compose strip — collapse to a tongue instead of unmounting
+- **260913-e20j-quake-start-operator-pending-reset** — Quake Terminal — Start Operator Pending State Reset
+- **260913-05ab-cron-tabs-ungated** — Cron Tabs Ungated
+- **260912-xi3h-data-table-tanstack** — One Data Table — Operator Tasks, Cron List, Cron Log over TanStack Table
+- **260912-pfo3-drop-operator-tick-seed** — Drop the rk-side operator-tick seed — `rk operator` becomes launcher-only
+- **260912-nynf-quake-terminal-rename** — Quake Terminal Rename
+- **260912-m5lo-quake-terminal-docked-compose** — Quake Terminal Docked Compose
+- **260912-lut4-gui-toolbar-header-fold** — GUI Toolbar → Tile Header Measured Fold
+- **260912-jl4w-quake-terminal-resize** — Quake Terminal Edge and Corner Resize
+- **260912-7usy-quake-terminal-operator-page** — Quake Terminal Operator Page
+- **260911-xy8b-operator-tasks-lists-all-tracked-items** — Operator Tasks tab lists every tracked item, not only pane-bearing workers
+- **260911-rp54-daemon-utf8-locale-empty-enumeration** — Daemon UTF-8 Locale — Empty Enumeration Fix
+- **260911-peui-user-message-addressee-envelope** — user-message operator template — addressee envelope
+- **260911-owgh-watchlist-reader-tracked-list** — Read the fab operator watchlist from the 2.25 `tracked:` list — the Operator Tasks tab, WATCHED zone and watched-row underbar are empty on every server
+- **260911-ntde-cron-wake-on-flags-seed-tuning** — Cron wake_on CLI flags + interim operator-tick seed tuning
+- **260911-mljj-hexokit-brand-prose** — HexoKit brand prose (plan row C3a)
+- **260911-hcon-cron-surface-consolidation** — Cron surface consolidation — console `Cron List | Cron Log` tabs, retire the sidebar CLOCK section and the Server-page CRONS / RECENT DELIVERIES zones, add a `cron` topic page to the rk skill bundle
+- **260911-2281-console-tasks-segment-watchlist** — Console Operator Tasks Segment — the Operator Watchlist in the Quake Console
+- **260910-xy7q-gui-perf-measure** — GUI Perf Measure (C5 — the gate for C6)
+- **260910-wzve-tab-new-command-json-ready** — rk tab new — Trailing Command, `--json` Identity, `--ready` Gate
+- **260910-vu4p-gui-desktop-tile-strip-and-palette** — GUI Desktop — Tile Strip and Launch Palette Rows (G2)
+- **260910-t9hb-mcp-spec** — rk MCP Spec — W0 of the rk MCP plan
+- **260910-r7v8-gui-display-block-relocatable** — GUI display block — relocatable body, per-machine pointer
+- **260910-r5ao-cron-list-structured-json** — Structured `rk cron list --json` Fields
+- **260910-oa3c-code-rescue-positive-signal-record-ownership** — Code Tile Rescue — Positive Empty-Boot Signal + Bridge Record Ownership
+- **260910-nuf6-rk-mcp-stdio** — rk MCP stdio server — W1 of the rk MCP plan
+- **260910-hzih-tab-setter-verbs-owner-option** — `rk tab` signal setter verbs + `@rk_win_owner`
+- **260910-ebgp-split-architecture-memory-subdomain** — Split architecture.md Memory into an architecture/ Sub-Domain
+- **260910-d0za-gui-agent-verbs-input-and-windows** — GUI Agent Verbs — windows, input, wait, capture upgrades, clipboard, open, lock (G3)
+- **260910-a7g2-capture-classify-pending-prompts** — Capture Classify — Pending-Prompt Detection on Uninstrumented Panes
+- **260910-9aup-cron-idle-every-skip-if-busy** — Cron idle reminders — `--idle-every` sugar, `skip-if-busy` delivery, and `rk cron edit`
+- **260910-7pek-mux-panes-has-agent** — `rk mux panes --json` — `has_agent` per row
+- **260910-74q0-code-tile-first-boot-rescue-reload** — Code Tile First-Boot Rescue Reload (gated on the code-bridge host record)
+- **260910-6ehs-console-activity-segment-status-chip** — Console Activity Segment + Status-Bar Clock Chip
+- **260910-58al-help-topics-submenu** — Help Topics Submenu
+- **260910-4t9b-stable-rk-path-daemon-spawns** — Stable rk path for daemon-spawned processes
+- **260910-2jl3-gui-desktop-icewm-and-launcher** — GUI desktop — the IceWM rung, seeded profile, WM stamp, and launcher (G1)
+- **260910-1rx0-server-page-clock-dashboard** — tmux Server Page Clock Dashboard
+- **260910-0awz-tab-switch-persistent-terminal** — Tab-switch flicker fix — persistent terminal + byte-gated confirmation
+- **260910-0536-watched-underbar-opr-register** — Watched underbar overlay + `opr` register
+- **260909-upt2-cron-decoupling-mute-lease** — Cron Decoupling — Mute Lease, Generic Roles, Caller-Supplied Respawn
+- **260909-ts8e-backoff-ladder-rung-seeding** — Backoff Ladder Rung Seeding
+- **260909-q7mj-codex-popup-enter-guard** — Codex Popup Enter Guard
+- **260909-pdow-viewer-figure-pan-zoom** — Viewer Figure Pan-and-Zoom (excalidraw scenes + mermaid diagrams)
+- **260909-o2sp-gui-surface-tile** — GUI Surface Tile (plan C3 — frontend)
+- **260909-bbv1-gui-agent-verbs** — GUI Agent Verbs — `rk gui exec`, `rk gui shot`, DISPLAY export, `rk skill gui` (plan C4)
+- **260909-ae2w-omnibox-placeholder-clarity** — Omnibox Placeholder Clarity
+- **260909-7i4h-derived-viewer-identity** — Derived Viewer Identity
+- **260909-4mhg-relay-liveness-deadline** — Relay Liveness Deadline
+- **260909-4gt7-cron-wake-self-exclusion** — Cron Wake Self-Exclusion, Transition Filter, Honest Debounce
+- **260908-whnu-sse-lost-wakeup-results-tick** — Fix SSE hub lost-wakeup: pending event-driven dispatch swallowed by results-only tick
+- **260908-t7fm-provider-aware-skill-prefix** — Provider-Aware Skill Invocation Prefix
+- **260908-s9fw-cache-pane-border-git-info** — Cache pane-border git info (fix the split-window server wedge)
+- **260908-qyin-cron-schedule-completions** — Cron Schedule Completions
+- **260908-qgfk-operator-omnibox-focus-height-jitter** — Operator Omnibox Focus Height Jitter
+- **260908-nnqu-fix-agent-neutral-detection** — Fix agent-neutral detection and transcript-backed actions
+- **260908-lxim-tutorial-operator-era-refresh** — Tutorial Operator-Era Refresh
+- **260908-krov-present-viewer-shell** — Present Viewer Shell for .md and .excalidraw
+- **260908-f89x-cron-session-targets-gc** — Cron Session Targets + Orphan GC
+- **260908-ewud-address-bar-path-targets** — Address Bar Defaults Path Input to Present Targets
+- **260908-ek6j-fix-main-divider-cross-axis-clamp** — Fix main-* divider clamp cross-axis contamination
+- **260908-aumn-operator-direct-open-quake-gate** — Operator: direct sidebar open vs. quick-terminal (quake console) access
+- **260908-02jx-flush-surface-toggles-drop-operator-button** — Flush Surface Toggles + Drop Operator Button
+- **260907-jp91-operator-console-collapse-icon** — Operator Console Collapse Fixes
+- **260907-ibst-breadcrumb-coarse-touch-height** — Breadcrumb Coarse-Pointer Touch Height Fix
+- **260907-a482-code-server-outside-git-root** — Show Code Server Even When Not In A Git Root
+- **260906-wr2z-server-header-coarse-density** — Server Header Coarse Density
+- **260906-kbbh-operator-tick-seed-respawn** — Operator-Tick Seeding + Role Respawn
+- **260906-f4s6-omnibox-focus-release** — Operator Omnibox Focus Release
+- **260906-dm30-await-ready-narrow-pane-verdict** — `rk mux await --ready` narrow-pane verdict + box-drawing-tolerant sentinel match
+- **260906-6x7w-control-primitive-gallery** — Control Primitive + Gallery
+- **260905-sh7y-console-slide-resize-glass-paste** — Quake Console v2 — Slide, Resize, Affordances, Glass, Image Paste
+- **260905-h7tx-operator-tongue-return-chip-glyphs** — Operator Tongue Return Toggle + Compose-Chip Glyph Fixes
+- **260905-4xu7-operator-templated-chat-lane** — Operator Templated Chat Lane (chatDelivery)
+- **260904-svfv-inject-image-chip-probe** — Echo Probe Recognizes the `[Image #N]` Composer Chip
+- **260904-r7uk-await-ready-parked-classification** — Await-Ready Parked Classification (Agent-Messaging Part B)
+- **260904-qa85-operator-chat-console** — Operator Chat Console
+- **260904-owue-chat-lens-residual-renames** — Chat Lens Residual Renames (Sweep Change A2)
+- **260904-kppn-mux-send-delivery-hardening** — Mux Send Delivery Hardening (Agent-Messaging Part A)
+- **260904-gx32-tmuxctl-bridge-writable** — Writable tmuxctl Control Bridge (Go-Enforced Read-Only)
+- **260904-fvpu-mux-help-groups-messaging-topic** — Mux Help Groups + Messaging Topic Page (Agent-Messaging Part C)
+- **260904-71yx-terminal-relay-reap-gate-reload** — Terminal Relay — Reap Children, Gate the Pre-Attach Reload
+- **260904-6o28-test-progress-banners** — Test-Run Phase Progress Banners
+- **260904-39bp-remove-chat-lens** — Remove Chat Lens
+- **260904-1wq7-server-tile-flyout-edge-anchor** — Server Tile Flyout Edge Anchor
+- **260904-00zd-tutorial-polish-chapter-merge** — Tutorial polish — naming consistency, single sewn companion page, Act→Chapter terminology
+- **260903-a8e4-rk-operator-launcher** — rk operator — own the operator-launcher mechanics in run-kit
+- **260903-4czh-boot-ready-spawn-inject** — Boot-ready signal + spawn-and-inject composite
+- **260903-1ldw-standardize-color-entry-flyout-card** — Standardize color-selector invocation on the row flyout card
+- **260901-phip-daemon-stop-graceful-shutdown** — Daemon Stop Graceful Shutdown
 - **260911-cl9j-mcp-http-route** — MCP streamable-HTTP route — `/mcp` on the daemon (W4 of the rk MCP plan)
 - **260911-u49l-rk-board-verb** — rk board verb — CLI door onto the five board routes, plus the `board` MCP policy row
 - **260911-sjs1-rk-operator-request-verb** — rk operator request verb
