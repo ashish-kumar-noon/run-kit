@@ -367,3 +367,91 @@ export function LayoutShapeGlyph({ shape }: { shape: LayoutShape }) {
     </ControlGlyph>
   );
 }
+
+/** Paste clipboard (gui header fold) — the lucide clipboard. */
+export function PasteGlyph() {
+  return (
+    <ControlGlyph name="paste">
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    </ControlGlyph>
+  );
+}
+
+/** Send key… (gui header fold) — the lucide keyboard. */
+export function SendKeyGlyph() {
+  return (
+    <ControlGlyph name="send-key">
+      {/* The ⌥ option symbol: this sends ONE modifier chord to the guest. A
+          keyboard silhouette reads as "the keyboard" and is indistinguishable
+          from a keyboard glyph at the rendered 14px. */}
+      <path d="M4 17 12 7h8" />
+      <path d="M4 7h4" />
+    </ControlGlyph>
+  );
+}
+
+/** Open terminal (gui header fold) — the lucide terminal (`>_`). */
+export function TerminalGlyph() {
+  return (
+    <ControlGlyph name="terminal">
+      <path d="m4 17 6-6-6-6" />
+      <path d="M12 19h8" />
+    </ControlGlyph>
+  );
+}
+
+/** Open browser (gui header fold) — the lucide globe. */
+export function BrowserGlyph() {
+  return (
+    <ControlGlyph name="browser">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </ControlGlyph>
+  );
+}
+
+/** Toggle stats (gui header fold) — the lucide activity waveform. */
+export function StatsGlyph() {
+  return (
+    <ControlGlyph name="stats">
+      <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />
+    </ControlGlyph>
+  );
+}
+
+/** Reconnect (gui header fold) — the lucide rotate-cw. */
+export function ReconnectGlyph() {
+  return (
+    <ControlGlyph name="reconnect">
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+    </ControlGlyph>
+  );
+}
+
+/** More controls (the gui fold's ⚙ pinned block) — the lucide settings gear. */
+export function GearGlyph() {
+  return (
+    <ControlGlyph name="gear">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </ControlGlyph>
+  );
+}
+
+/** Fullscreen (the gui header's ⤢ rail verb) — diagonal outward arrows
+ *  (lucide maximize-2), distinct from the tile-expand ZoomGlyph's corner
+ *  brackets. */
+export function FullscreenGlyph() {
+  return (
+    <ControlGlyph name="fullscreen">
+      <path d="M15 3h6v6" />
+      <path d="M9 21H3v-6" />
+      <path d="m21 3-7 7" />
+      <path d="m3 21 7-7" />
+    </ControlGlyph>
+  );
+}
+
