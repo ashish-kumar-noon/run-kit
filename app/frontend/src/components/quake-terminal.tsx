@@ -75,6 +75,34 @@ const NO_OPERATOR_HINT_THROTTLE_MS = 4000;
  *  its hint line, mobile activations toast it. */
 const NO_OPERATOR_HINT = "no operator on this server — run rk operator";
 
+/** No SSE event says "the start you requested produced no window". The daemon
+ *  answers the POST within its 30 s receipt bound (operatorStartReceiptTimeout
+ *  in api/operator_start.go) and wakes the hub on 202, so a window that has
+ *  not appeared by now is not coming from this request: re-arm the button
+ *  with an inline note instead of holding it dead. */
+const START_OPERATOR_PENDING_TIMEOUT_MS = 45_000;
+const START_OPERATOR_TIMEOUT_NOTE =
+  "operator did not appear — check the operator terminal or run rk operator";
+
+/** One in-flight Start operator request: `gen` identifies the click (so a
+ *  late outcome from an older attempt cannot release a newer one), and
+ *  `startedAt` anchors its own pending deadline. */
+type StartPendingEntry = { gen: number; startedAt: number };
+
+/** The map without `server`'s entry — unchanged (same reference) when there is
+ *  none, or when `gen` is given and the entry belongs to a different attempt. */
+function withoutStartPending(
+  prev: ReadonlyMap<string, StartPendingEntry>,
+  server: string,
+  gen?: number,
+): ReadonlyMap<string, StartPendingEntry> {
+  const cur = prev.get(server);
+  if (!cur || (gen !== undefined && cur.gen !== gen)) return prev;
+  const next = new Map(prev);
+  next.delete(server);
+  return next;
+}
+
 /**
  * The quake terminal — the operator-chat surface: a global pull-down drawer
  * overlay on desktop, available on every route. Mounted ONCE at the
@@ -217,13 +245,26 @@ export function QuakeTerminal() {
   const [pinnedServer, setPinnedServer] = useState<string | null>(null);
   const [pickerServer, setPickerServer] = useState<string | null>(null);
   const [pendingSend, setPendingSend] = useState<string | null>(null);
-  // Start operator (the operator-less body's button): pending holds until the
-  // SSE sessions payload carries the new operator window and this body
-  // unmounts — there is no client polling, so success leaves the button
-  // disabled rather than re-arming it; a failure re-arms it and carries the
-  // server's message inline.
-  const [startPending, setStartPending] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
+  // Start operator (the operator-less body's button): the in-flight
+  // POST /api/operator/start requests, server → { gen, startedAt }. Keyed per
+  // server because this component outlives the body — a switch to another
+  // server must render that server's own button, idle or pending, and a flag
+  // cleared on body unmount would survive both the switch and a window that
+  // appears then dies. An entry is released by the target-resolves effect
+  // below (the SSE sessions payload carrying that server's operator window —
+  // success is observed, never assumed), by a non-409 failure of the SAME
+  // attempt (`gen` — a late rejection from an older attempt must not release
+  // a newer one), or by that entry's own pending deadline. The error is
+  // server-scoped for the same reason and retired once that server's window
+  // is observed.
+  const [startPendingByServer, setStartPendingByServer] = useState<
+    ReadonlyMap<string, StartPendingEntry>
+  >(() => new Map());
+  const [startError, setStartError] = useState<{ server: string; message: string } | null>(null);
+  const startGenRef = useRef(0);
+  // server → the generation of its most recent click; a rejection compares
+  // against it so only the latest attempt's outcome ever lands.
+  const latestStartGenRef = useRef(new Map<string, number>());
   // The drawer's body segment — the quake terminal's local ephemeral state
   // (no URL, tmux,
   // or localStorage write), defaulting to Operator Terminal and resetting on
@@ -703,6 +744,42 @@ export function QuakeTerminal() {
     if (!open) setPendingSend(null);
   }, [open]);
 
+  // Start operator resolves when a PENDING server's operator window shows up
+  // in the sessions payload — keyed on that server's own slice, not the
+  // drawer's current `target`, so a resolution on runKit clears runKit's
+  // pending while the drawer shows fabKit. Clearing on appearance (rather
+  // than on body unmount) is what leaves the button idle when the window
+  // later vanishes.
+  useEffect(() => {
+    let next: ReadonlyMap<string, StartPendingEntry> = startPendingByServer;
+    for (const srv of startPendingByServer.keys()) {
+      if (findOperatorWindow(sessionsByServer.get(srv) ?? [])) next = withoutStartPending(next, srv);
+    }
+    if (next !== startPendingByServer) setStartPendingByServer(next);
+  }, [startPendingByServer, sessionsByServer]);
+  // An observed window also retires that server's start error: a timeout
+  // note or failure message is moot once the operator is there, and must not
+  // resurface in the operator-less body if the window later dies.
+  useEffect(() => {
+    if (startError === null) return;
+    if (findOperatorWindow(sessionsByServer.get(startError.server) ?? [])) setStartError(null);
+  }, [startError, sessionsByServer]);
+  // One deadline per pending entry, anchored to its own `startedAt` — re-arming
+  // on a map change (another server's click) never extends this one's wait.
+  useEffect(() => {
+    const timers = Array.from(startPendingByServer, ([srv, entry]) =>
+      setTimeout(
+        () => {
+          setStartPendingByServer((prev) => withoutStartPending(prev, srv, entry.gen));
+          setStartError({ server: srv, message: START_OPERATOR_TIMEOUT_NOTE });
+        },
+        Math.max(0, entry.startedAt + START_OPERATOR_PENDING_TIMEOUT_MS - Date.now()),
+      ),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [startPendingByServer]);
+  const startPending = server ? startPendingByServer.has(server) : false;
+
   // ── Geometry (desktop drawer) + glass ─────────────────────────────────────
   const [geometry, writeGeometry] = useQuakeGeometry();
   const [opacity] = useQuakeOpacity();
@@ -1066,9 +1143,11 @@ export function QuakeTerminal() {
         // door onto POST /api/operator/start; the hint line stays as the
         // sub-line. Success needs no local transition — the SSE sessions
         // payload carries the new operator window, `target` resolves, and
-        // this body unmounts (a 409 operator_exists is the same outcome: the
-        // operator appeared under us). Any other failure re-arms the button
-        // and renders the server's message inline.
+        // this body unmounts; the pending state is released by the
+        // target-resolves effect above, not by this unmount (a 409
+        // operator_exists is the same outcome: the operator appeared under
+        // us). Any other failure re-arms the button and renders the server's
+        // message inline, for the server it was produced on.
         <div
           className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-4 text-xs"
           data-testid="quake-terminal-empty"
@@ -1081,12 +1160,23 @@ export function QuakeTerminal() {
               aria-busy={startPending}
               onClick={() => {
                 if (startPending) return;
-                setStartPending(true);
-                setStartError(null);
-                startOperator(server).catch((err: unknown) => {
+                const requested = server;
+                const gen = ++startGenRef.current;
+                latestStartGenRef.current.set(requested, gen);
+                setStartPendingByServer((prev) =>
+                  new Map(prev).set(requested, { gen, startedAt: Date.now() }),
+                );
+                setStartError((prev) => (prev?.server === requested ? null : prev));
+                startOperator(requested).catch((err: unknown) => {
                   if (err instanceof ApiError && err.code === "operator_exists") return;
-                  setStartError(err instanceof Error ? err.message : "Operator start failed");
-                  setStartPending(false);
+                  // An older attempt's late rejection: a newer click owns this
+                  // server's slot and its outcome is still pending.
+                  if (latestStartGenRef.current.get(requested) !== gen) return;
+                  setStartPendingByServer((prev) => withoutStartPending(prev, requested, gen));
+                  setStartError({
+                    server: requested,
+                    message: err instanceof Error ? err.message : "Operator start failed",
+                  });
                 });
               }}
             >
@@ -1094,9 +1184,9 @@ export function QuakeTerminal() {
             </Control>
           )}
           <span className="text-text-secondary">{NO_OPERATOR_HINT}</span>
-          {startError && (
+          {startError !== null && startError.server === server && (
             <span role="alert" data-testid="quake-terminal-start-error" className="text-signal-red">
-              {startError}
+              {startError.message}
             </span>
           )}
         </div>
