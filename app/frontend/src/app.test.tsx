@@ -28,7 +28,7 @@ import { ThemeProvider } from "@/contexts/theme-context";
 import { ToastProvider } from "@/components/toast";
 import { InstanceNameProvider } from "@/contexts/instance-name-context";
 import { ChromeProvider } from "@/contexts/chrome-context";
-import { ZenProvider } from "@/contexts/zen-context";
+import { ZenProvider, useZenDispatch } from "@/contexts/zen-context";
 import { FocusedTerminalProvider } from "@/contexts/focused-terminal-context";
 import { OptimisticProvider } from "@/contexts/optimistic-context";
 import { TopBarSlotProvider } from "@/contexts/top-bar-slot-context";
@@ -1416,6 +1416,16 @@ describe("terminal route grid key — SurfaceLayout keyed by server", () => {
   // read its mount/unmount record and the windowId prop stream.
   stubMatchMedia(() => false);
 
+  // Zen is transient provider state (no storage seam), so the harness exposes
+  // its dispatch through a probe child — the status-bar gate tests flip zen
+  // the way the chord/palette body would, without driving keybindings.
+  const zenDispatchRef: { current: ((active: boolean) => void) | null } = { current: null };
+  function ZenProbe() {
+    const { setZenActive } = useZenDispatch();
+    zenDispatchRef.current = setZenActive;
+    return null;
+  }
+
   function TerminalRouteRoot() {
     return (
       <ThemeProvider>
@@ -1423,6 +1433,7 @@ describe("terminal route grid key — SurfaceLayout keyed by server", () => {
           <InstanceNameProvider>
             <ChromeProvider>
               <ZenProvider>
+                <ZenProbe />
                 <FocusedTerminalProvider>
                   <OptimisticProvider>
                     <TopBarSlotProvider>
@@ -1575,5 +1586,73 @@ describe("terminal route grid key — SurfaceLayout keyed by server", () => {
       }),
     );
     expect(surfaceLayoutSpy.mounts).toEqual(["mount", "unmount", "mount"]);
+  });
+
+  describe("status bar window cluster yields to an on-screen PANE panel", () => {
+    // The register view has one desktop home at a time: the bar's window
+    // cluster (`status-bar-window`) renders iff the PANE panel is NOT on
+    // screen — section toggled on AND sidebar open (zen off). The host
+    // cluster renders in every state. Both inputs are localStorage-backed
+    // pub/sub booleans, seeded here before render and flipped at runtime
+    // through the rail's real toggle.
+    afterEach(() => {
+      localStorage.clear();
+    });
+
+    async function renderTerminalRoute() {
+      const router = createRouter({
+        routeTree: testRouteTree,
+        history: createMemoryHistory({ initialEntries: ["/srv/0"] }),
+      });
+      render(<RouterProvider router={router} />);
+      await waitFor(() => screen.getByTestId("status-bar-host"));
+    }
+
+    it("renders the window cluster by default (PANE section off)", async () => {
+      await renderTerminalRoute();
+      expect(screen.getByTestId("status-bar-window")).toBeInTheDocument();
+      expect(screen.getByTestId("status-bar-host")).toBeInTheDocument();
+    });
+
+    it("yields the window cluster while the PANE section is on and the sidebar open; the host cluster stays", async () => {
+      localStorage.setItem("runkit-sidebar-section-pane", "true");
+      await renderTerminalRoute();
+      expect(screen.queryByTestId("status-bar-window")).toBeNull();
+      expect(screen.getByTestId("status-bar-host")).toBeInTheDocument();
+    });
+
+    it("keeps the window cluster when the PANE section is on but the sidebar is collapsed", async () => {
+      localStorage.setItem("runkit-sidebar-section-pane", "true");
+      localStorage.setItem("runkit-sidebar-open", "false");
+      await renderTerminalRoute();
+      expect(screen.getByTestId("status-bar-window")).toBeInTheDocument();
+    });
+
+    it("flips live with the rail toggle — no remount", async () => {
+      await renderTerminalRoute();
+      expect(screen.getByTestId("status-bar-window")).toBeInTheDocument();
+      const toggle = screen.getByRole("button", { name: "Toggle Pane section" });
+      fireEvent.click(toggle);
+      await waitFor(() => expect(screen.queryByTestId("status-bar-window")).toBeNull());
+      fireEvent.click(toggle);
+      await waitFor(() => expect(screen.getByTestId("status-bar-window")).toBeInTheDocument());
+      // The grid never remounted across the flips.
+      expect(surfaceLayoutSpy.mounts).toEqual(["mount"]);
+    });
+
+    it("zen hands the registers back to the bar while the PANE section stays on", async () => {
+      // Zen hides the sidebar without touching the section preference, so the
+      // panel is off screen: the bar must show the cluster (host cluster too)
+      // or zen would be the one desktop state with no register view.
+      localStorage.setItem("runkit-sidebar-section-pane", "true");
+      await renderTerminalRoute();
+      expect(screen.queryByTestId("status-bar-window")).toBeNull();
+      act(() => zenDispatchRef.current?.(true));
+      await waitFor(() => expect(screen.getByTestId("status-bar-window")).toBeInTheDocument());
+      expect(screen.getByTestId("status-bar-host")).toBeInTheDocument();
+      expect(localStorage.getItem("runkit-sidebar-section-pane")).toBe("true");
+      act(() => zenDispatchRef.current?.(false));
+      await waitFor(() => expect(screen.queryByTestId("status-bar-window")).toBeNull());
+    });
   });
 });
