@@ -18,7 +18,10 @@ import { GUI_ON_ICEWM, mockGuiBackend } from "./_gui-mock";
 // and never fires an rk action. The sessions payload's `@2` window persists
 // `layout: "split-h:tty,gui"`, so the gui tile stays open across the reload
 // the persistence case needs. localStorage is per-context and fresh per test
-// — every case starts released.
+// — every case starts released. The describe block sets a shared
+// `test.use({ viewport: 1280x800 })`: the capture verb is fine-pointer only,
+// and 1280 is wide enough that no ladder item folds, so the pinned block's
+// reserve is exercised without the fold confusing the assertions.
 
 /** The gui canvas wrapper + the noVNC canvas inside it. */
 const canvasWrap = (page: Page) => page.getByTestId("gui-surface-canvas");

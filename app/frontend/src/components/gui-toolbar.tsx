@@ -686,8 +686,13 @@ export function GuiToolbar({
             </button>
           </span>
         ) : null}
+        {/* The rendered pinned block carries ONE leading divider for the whole
+            run, so only the FIRST member probes it: with capture present the
+            `capture` probe owns it and the gear measures bare, otherwise the
+            gear owns it. Probing it twice over-reserved a divider and folded a
+            ladder item a few px early. */}
         <span data-fold="pinned" className="flex items-center shrink-0">
-          <span className={HEADER_DIVIDER_CLASS} />
+          {captureRow ? null : <span className={HEADER_DIVIDER_CLASS} />}
           <button type="button" tabIndex={-1} className={HEADER_VERB_CLASS}>
             <GearGlyph />
           </button>

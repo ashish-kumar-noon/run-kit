@@ -155,45 +155,49 @@ A new `app/frontend/tests/e2e/gui-keyboard-capture.spec.ts` (alongside `gui-surf
 
 ### Functional Completeness
 
-- [ ] A-001 R1: With `captured: true`, `hasReclaimableMatch` returns `true` only for chords matching `gui-capture-toggle`; with it absent/false the predicate is byte-identical to the pre-change behavior for kinds `gui`, `code`, and `web`.
-- [ ] A-002 R2: The default registry contains `gui-capture-toggle` (`KeyG`, shifted tier, `guiOnly`, `ignoreInputs`); it resolves enabled on both host platforms, appears in the Shortcuts overlay, and a user remap moves the escape hatch and every derived hint.
-- [ ] A-003 R3: `readGuiCapture`/`writeGuiCapture` round-trip `"1"`/absent, default to `false` on absent or invalid values, and degrade safely on a throwing `localStorage`; the latch survives a reload.
-- [ ] A-004 R4: The release chord toggles capture exactly while the gui tile owns focus; elsewhere the chord falls through untouched (no handler mounted).
-- [ ] A-005 R5: `KeyboardGlyph` renders with `data-icon="keyboard"` and the A6 geometry under the `ControlGlyph` defaults.
-- [ ] A-006 R6: The capture verb renders in the pinned block at every width (never folds, never clipped) on fine pointers, latches with the `LATCHED_ARM_RINGED` recipe without a layout shift, fires the palette row's `onSelect`, shows a `Tip` with the live registry keycap, and is omitted (not disabled) on coarse pointers.
-- [ ] A-007 R7: The gui meta chip reads `keys → desktop` in green wash+ink without a ring while latched and returns to `wm · display` (or its bare-WM degradation) on release.
-- [ ] A-008 R8: The palette carries one `gui-capture-toggle` row labelled `GUI: Capture keyboard`/`GUI: Release keyboard` by state, present on fine and absent on coarse, decorated by `withShortcutHints`.
+- [x] A-001 R1: With `captured: true`, `hasReclaimableMatch` returns `true` only for chords matching `gui-capture-toggle`; with it absent/false the predicate is byte-identical to the pre-change behavior for kinds `gui`, `code`, and `web`.
+- [x] A-002 R2: The default registry contains `gui-capture-toggle` (`KeyG`, shifted tier, `guiOnly`, `ignoreInputs`); it resolves enabled on both host platforms, appears in the Shortcuts overlay, and a user remap moves the escape hatch and every derived hint.
+- [x] A-003 R3: `readGuiCapture`/`writeGuiCapture` round-trip `"1"`/absent, default to `false` on absent or invalid values, and degrade safely on a throwing `localStorage`; the latch survives a reload.
+- [x] A-004 R4: The release chord toggles capture exactly while the gui tile owns focus; elsewhere the chord falls through untouched (no handler mounted).
+- [x] A-005 R5: `KeyboardGlyph` renders with `data-icon="keyboard"` and the A6 geometry under the `ControlGlyph` defaults.
+- [x] A-006 R6: The capture verb renders in the pinned block at every width (never folds, never clipped) on fine pointers, latches with the `LATCHED_ARM_RINGED` recipe without a layout shift, fires the palette row's `onSelect`, shows a `Tip` with the live registry keycap, and is omitted (not disabled) on coarse pointers.
+- [x] A-007 R7: The gui meta chip reads `keys → desktop` in green wash+ink without a ring while latched and returns to `wm · display` (or its bare-WM degradation) on release.
+- [x] A-008 R8: The palette carries one `gui-capture-toggle` row labelled `GUI: Capture keyboard`/`GUI: Release keyboard` by state, present on fine and absent on coarse, decorated by `withShortcutHints`.
 
 ### Behavioral Correctness
 
-- [ ] A-009 R1: While captured, ⌘K (the original complaint) reaches the guest — proven by the e2e: the palette does not open and the keydown reaches the canvas wrapper.
-- [ ] A-010 R4: The three exits all work — release chord, pinned-icon click, and the pointer-reachable palette row.
-- [ ] A-011 R3: The latch persists across a full page reload (e2e-proven).
+- [x] A-009 R1: While captured, ⌘K (the original complaint) reaches the guest — proven by the e2e: the palette does not open and the keydown reaches the canvas wrapper.
+- [x] A-010 R4: The three exits all work — release chord, pinned-icon click, and the pointer-reachable palette row.
+- [x] A-011 R3: The latch persists across a full page reload (e2e-proven).
 
 ### Scenario Coverage
 
-- [ ] A-012 R9: Unit suites cover the narrowing both ways, the posture key's four paths, the palette row's presence/label/id, the glyph seam, and the verb's permanence/coarse-omission.
-- [ ] A-013 R10: The new e2e spec passes under `just test-e2e gui-keyboard-capture`, and the adjacent `gui-surface`, `gui-toolbar-fold`, `macro-riff-bindings`, and `shortcut-registry` specs stay green.
+- [x] A-012 R9: Unit suites cover the narrowing both ways, the posture key's four paths, the palette row's presence/label/id, the glyph seam, and the verb's permanence/coarse-omission.
+- [x] A-013 R10: The new e2e spec passes under `just test-e2e gui-keyboard-capture`, and the adjacent `gui-surface`, `gui-toolbar-fold`, `macro-riff-bindings`, and `shortcut-registry` specs stay green.
 
 ### Edge Cases & Error Handling
 
-- [ ] A-014 R1: Kinds `code` and `web` never see the narrowing — their reclaim behavior is byte-identical whether or not capture is latched (the flag is threaded only for kind `"gui"`).
-- [ ] A-015 R6: At the narrowest widths the fold can only cost one more ladder item; the capture control itself can never be folded or clipped (safety assertion, not cosmetic).
-- [ ] A-016 R2: A macro bound to ⇧Ctrl+G still fires when the gui tile does not own focus (the dispatcher's first-match-with-handler rule yields past the absent `guiGated` handler) — the `macro-riff-bindings` spec stays green.
+- [x] A-014 R1: Kinds `code` and `web` never see the narrowing — their reclaim behavior is byte-identical whether or not capture is latched (the flag is threaded only for kind `"gui"`).
+- [x] A-015 R6: At the narrowest widths the fold can only cost one more ladder item; the capture control itself can never be folded or clipped (safety assertion, not cosmetic).
+- [x] A-016 R2: A macro bound to ⇧Ctrl+G still fires when the gui tile does not own focus (the dispatcher's first-match-with-handler rule yields past the absent `guiGated` handler) — the `macro-riff-bindings` spec stays green.
 
 ### Code Quality
 
-- [ ] A-017 Pattern consistency: New code follows naming and structural patterns of surrounding code (the `rk-gui-lock` posture shape, the ⌕ find-toggle `controlClass` call, the by-id palette mirror).
-- [ ] A-018 No unnecessary duplication: Existing utilities reused (`controlClass`, `Tip`/`TipGroup`, `kbdFor`/`chordHintFor` registry hints, `pickGuiActions` mirror, the `_gui-mock.ts` scaffolding).
-- [ ] A-019 Type narrowing over type assertions: the frontend changes introduce no `as` casts.
-- [ ] A-020 New behavior carries tests: every added/changed behavior above has unit or e2e coverage (test-alongside).
-- [ ] A-021 Comment discipline: new comments state constraints and cross-file contracts only — no narration, no change-ID citations.
+- [x] A-017 Pattern consistency: New code follows naming and structural patterns of surrounding code (the `rk-gui-lock` posture shape, the ⌕ find-toggle `controlClass` call, the by-id palette mirror).
+- [x] A-018 No unnecessary duplication: Existing utilities reused (`controlClass`, `Tip`/`TipGroup`, `kbdFor`/`chordHintFor` registry hints, `pickGuiActions` mirror, the `_gui-mock.ts` scaffolding).
+- [x] A-019 Type narrowing over type assertions: the frontend changes introduce no `as` casts.
+- [x] A-020 New behavior carries tests: every added/changed behavior above has unit or e2e coverage (test-alongside).
+- [x] A-021 Comment discipline: new comments state constraints and cross-file contracts only — no narration, no change-ID citations.
 
 ## Notes
 
 - Check items as you review: `- [x]`
 - All acceptance items must pass before `/fab-continue` (hydrate)
 - If an item is not applicable, mark checked and prefix with **N/A**: `- [x] A-NNN **N/A**: {reason}`
+
+## Deletion Candidates
+
+- None — this change adds new functionality without making existing code redundant
 
 ## Assumptions
 
