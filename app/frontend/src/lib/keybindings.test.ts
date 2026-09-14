@@ -91,6 +91,7 @@ describe("DEFAULT_BINDINGS integrity", () => {
       "zen-toggle": "Enter",
       "focus-hop": "Backquote",
       "terminal-find": "KeyF",
+      "gui-capture-toggle": "KeyG",
     });
   });
 
@@ -817,6 +818,7 @@ describe("palette parity invariant", () => {
     "gui-zoom-in": ["gui-zoom-in"], // GUI: Zoom in
     "gui-zoom-out": ["gui-zoom-out"], // GUI: Zoom out
     "gui-zoom-fit": ["gui-zoom-fit"], // GUI: Zoom to fit
+    "gui-capture-toggle": ["gui-capture-toggle"], // GUI: Capture/Release keyboard
     "zen-toggle": ["view-zen-enter", "view-zen-exit"],
     "focus-hop": ["tile-focus-tty", "tile-focus-code"],
     "web-find": ["web-find"], // Web: Find in page (260819-ie2i)
@@ -2415,9 +2417,9 @@ describe("webOnly — the web-find data flag (260819-ie2i)", () => {
 });
 
 describe("guiOnly — the gui-zoom data flag", () => {
-  it("exactly the three gui-zoom rows carry the flag in the shipped defaults", () => {
+  it("exactly the three gui-zoom rows and the capture toggle carry the flag in the shipped defaults", () => {
     const flagged = DEFAULT_BINDINGS.filter((b) => b.guiOnly).map((b) => b.actionId);
-    expect(flagged).toEqual(["gui-zoom-in", "gui-zoom-out", "gui-zoom-fit"]);
+    expect(flagged).toEqual(["gui-zoom-in", "gui-zoom-out", "gui-zoom-fit", "gui-capture-toggle"]);
   });
 
   it("ships the three rows ctrl-tier on Equal/Minus/Digit0, terminal scope, ignoreInputs — no mac refinement", () => {
@@ -2498,6 +2500,111 @@ describe("guiOnly — the gui-zoom data flag", () => {
       expect(shouldRefuseTerminalChord(e, resolved(BROWSER_MAC), "mac")).toBe(false);
       expect(shouldRefuseTerminalChord(e, resolved(SHELL_OTHER), "other")).toBe(false);
       expect(shouldRefuseTerminalChord(e, resolved(BROWSER_OTHER), "other")).toBe(false);
+    }
+  });
+});
+
+describe("gui-capture-toggle — the chord gate's escape hatch", () => {
+  it("ships shifted-tier on KeyG, terminal scope, ignoreInputs, guiOnly", () => {
+    expect(DEFAULT_BINDINGS.find((b) => b.actionId === "gui-capture-toggle")).toEqual({
+      actionId: "gui-capture-toggle",
+      code: "KeyG",
+      tier: "shifted",
+      scope: "terminal",
+      kind: "builtin",
+      label: "Keyboard capture",
+      description: "hand every chord to the guest desktop",
+      mapLabel: "capture",
+      ignoreInputs: true,
+      guiOnly: true,
+    });
+  });
+
+  it("resolves enabled on every host — Ctrl+Shift+G off mac, ⌘⇧G on mac", () => {
+    for (const host of ALL_HOSTS) {
+      expect(byId(resolved(host), "gui-capture-toggle")).toMatchObject({
+        code: "KeyG",
+        tier: "shifted",
+        enabled: true,
+        isDefault: true,
+      });
+    }
+    expect(formatCombo(byId(resolved(SHELL_OTHER), "gui-capture-toggle"), "other")).toBe(
+      "Shift+Ctrl+G",
+    );
+    expect(formatCombo(byId(resolved(SHELL_MAC), "gui-capture-toggle"), "mac")).toBe("⇧⌘G");
+  });
+
+  it("KeyG is otherwise unclaimed in the shifted tier — no registry or host-claim collision", () => {
+    expect(
+      DEFAULT_BINDINGS.filter((b) => b.code === "KeyG" && b.actionId !== "gui-capture-toggle"),
+    ).toEqual([]);
+    for (const host of ALL_HOSTS) {
+      expect(
+        claimedKeys(host.platform, host.shell).filter(
+          (c) => c.code === "KeyG" && c.tier === "shifted",
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it("the release chord reclaims for kind 'gui' only, captured or not", () => {
+    for (const host of ALL_HOSTS) {
+      const bindings = resolved(host);
+      const e =
+        host.platform === "mac"
+          ? chord({ code: "KeyG", shiftKey: true, metaKey: true })
+          : chord({ code: "KeyG", shiftKey: true, ctrlKey: true });
+      expect(hasReclaimableMatch(e, bindings, "gui")).toBe(true);
+      expect(hasReclaimableMatch(e, bindings, "code")).toBe(false);
+      expect(hasReclaimableMatch(e, bindings, "web")).toBe(false);
+      expect(hasReclaimableMatch(e, bindings, "gui", true)).toBe(true);
+    }
+  });
+
+  it("captured narrows the reclaim to the release binding alone — every other chord passes to the guest", () => {
+    const mac = resolved(SHELL_MAC);
+    const other = resolved(SHELL_OTHER);
+    // The chords that reclaim today all pass once captured: the palette
+    // (⌘K), the layout cycle (⌘;), and the guiOnly zoom trio.
+    expect(hasReclaimableMatch(chord({ code: "KeyK", metaKey: true }), mac, "gui", true)).toBe(false);
+    expect(hasReclaimableMatch(chord({ code: "Semicolon", metaKey: true }), mac, "gui", true)).toBe(false);
+    expect(hasReclaimableMatch(chord({ code: "Equal", ctrlKey: true }), mac, "gui", true)).toBe(false);
+    expect(hasReclaimableMatch(chord({ code: "KeyK", ctrlKey: true }), other, "gui", true)).toBe(false);
+    expect(
+      hasReclaimableMatch(chord({ code: "KeyK", shiftKey: true, ctrlKey: true }), other, "gui", true),
+    ).toBe(false);
+  });
+
+  it("a remapped release binding moves the escape hatch with it", () => {
+    const bindings = resolved(SHELL_OTHER, { "gui-capture-toggle": { code: "KeyU", tier: "shifted" } });
+    expect(
+      hasReclaimableMatch(chord({ code: "KeyU", shiftKey: true, ctrlKey: true }), bindings, "gui", true),
+    ).toBe(true);
+    expect(
+      hasReclaimableMatch(chord({ code: "KeyG", shiftKey: true, ctrlKey: true }), bindings, "gui", true),
+    ).toBe(false);
+  });
+
+  it("not captured is byte-identical to the pre-capture predicate on every kind", () => {
+    // The default parameter and an explicit `false` must agree, for a
+    // reclaimable chord, a guiOnly chord, and an unbound chord alike.
+    for (const host of ALL_HOSTS) {
+      const bindings = resolved(host);
+      const cases: ChordEvent[] = [
+        host.platform === "mac"
+          ? chord({ code: "KeyK", metaKey: true })
+          : chord({ code: "KeyK", ctrlKey: true }),
+        chord({ code: "Equal", ctrlKey: true }),
+        chord({ code: "KeyQ" }),
+      ];
+      for (const e of cases) {
+        for (const kind of ["gui", "code", "web"] as const) {
+          expect(hasReclaimableMatch(e, bindings, kind, false)).toBe(
+            hasReclaimableMatch(e, bindings, kind),
+          );
+        }
+      }
     }
   });
 });

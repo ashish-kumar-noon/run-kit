@@ -38,6 +38,8 @@ function input(overrides: Partial<GuiPaletteInput> = {}): GuiPaletteInput {
     hidpi: false,
     keyBarVisible: true,
     toolbarVisible: false,
+    capture: false,
+    onCaptureChange: vi.fn(),
     onOpenLogs: vi.fn(),
     onReconnect: vi.fn(),
     ...overrides,
@@ -112,6 +114,7 @@ describe("buildGuiActions — tile-open gating", () => {
       "gui-zoom-in",
       "gui-view-1to1",
       "gui-lock",
+      "gui-capture-toggle",
       "gui-toolbar-show",
       "gui-stats-show",
       "gui-logs",
@@ -349,6 +352,7 @@ describe("buildGuiActions — resolution rows", () => {
       "gui-zoom-in",
       "gui-view-1to1",
       "gui-lock",
+      "gui-capture-toggle",
       "gui-toolbar-show",
       "gui-stats-show",
       "gui-logs",
@@ -591,6 +595,30 @@ describe("buildGuiActions — toolbar panel pair", () => {
     const closed = ids(input({ tileOpen: false }));
     expect(closed).not.toContain("gui-toolbar-hide");
     expect(closed).not.toContain("gui-toolbar-show");
+  });
+});
+
+describe("buildGuiActions — keyboard capture row", () => {
+  it("is ONE state-labelled row with the stable registry id, routing the toggle", () => {
+    const released = input({ capture: false });
+    const releasedRow = buildGuiActions(released).find((a) => a.id === "gui-capture-toggle")!;
+    expect(releasedRow.label).toBe("GUI: Capture keyboard");
+    releasedRow.onSelect();
+    expect(released.onCaptureChange).toHaveBeenCalledWith(true);
+
+    const latched = input({ capture: true });
+    const latchedRow = buildGuiActions(latched).find((a) => a.id === "gui-capture-toggle")!;
+    expect(latchedRow.label).toBe("GUI: Release keyboard");
+    latchedRow.onSelect();
+    expect(latched.onCaptureChange).toHaveBeenCalledWith(false);
+  });
+
+  it("is fine-pointer only and tile-gated — omitted, never disabled", () => {
+    expect(ids(input({ coarsePointer: false }))).toContain("gui-capture-toggle");
+    expect(ids(input({ coarsePointer: true }))).not.toContain("gui-capture-toggle");
+    expect(ids(input({ tileOpen: false }))).not.toContain("gui-capture-toggle");
+    const row = buildGuiActions(input()).find((a) => a.id === "gui-capture-toggle")!;
+    expect(row.disabled).toBeUndefined();
   });
 });
 describe("buildGuiActions — the locked host pin", () => {

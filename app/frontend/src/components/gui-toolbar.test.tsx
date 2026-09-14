@@ -26,6 +26,8 @@ function paletteInput(overrides: Partial<GuiPaletteInput> = {}): GuiPaletteInput
     hidpi: false,
     keyBarVisible: true,
     toolbarVisible: false,
+    capture: false,
+    onCaptureChange: vi.fn(),
     geometry: "auto",
     supervisorAvailable: true,
     onTurnOn: vi.fn(),
@@ -57,6 +59,7 @@ interface RenderProps {
   coarsePointer?: boolean;
   quality?: GuiQuality;
   statsVisible?: boolean;
+  capture?: boolean;
   geometry?: string;
   width?: number;
   height?: number;
@@ -72,6 +75,7 @@ function el(p: RenderProps, actions: GuiPaletteAction[]) {
       coarsePointer={p.coarsePointer ?? false}
       quality={p.quality ?? "balanced"}
       statsVisible={p.statsVisible ?? false}
+      capture={p.capture ?? false}
       geometry={p.geometry ?? "auto"}
       width={p.width ?? 0}
       height={p.height ?? 0}
@@ -162,7 +166,7 @@ const inlineLabels = () =>
     .map((b) => b.getAttribute("aria-label"));
 
 describe("GuiToolbar — presence table (expanded cold default)", () => {
-  it("fine + connected + non-mirror: the full inventory in ladder order, no ⚙", () => {
+  it("fine + connected + non-mirror: the full inventory in ladder order, the capture verb pinned, no ⚙", () => {
     setup({ coarsePointer: false, geometry: "1920x1080", width: 1920, height: 1080 });
     expect(inlineLabels()).toEqual([
       "Resolution 1920×1080, menu",
@@ -175,13 +179,15 @@ describe("GuiToolbar — presence table (expanded cold default)", () => {
       "Open terminal",
       "Open browser",
       "Toggle stats",
+      "Keyboard capture",
     ]);
-    // Four groups ⇒ exactly three dividers, none between the action glyphs.
+    // Four groups ⇒ three ladder dividers, plus the pinned block's leading
+    // hairline — none between the action glyphs.
     expect(
       within(screen.getByTestId("gui-toolbar"))
         .queryAllByRole("generic", { hidden: true })
         .filter((s) => s.className.includes("w-px") && s.closest("[data-fold]") === null),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(screen.queryByTestId("gui-toolbar-overflow")).toBeNull();
   });
 
@@ -423,6 +429,71 @@ describe("GuiToolbar — the measured fold", () => {
     mockWidths(500, PROBE);
     setup();
     expect(screen.queryByTestId("gui-toolbar-overflow")).toBeNull();
+  });
+});
+
+describe("GuiToolbar — the pinned capture verb", () => {
+  it("renders in the pinned block on a fine pointer and fires the palette row's own onSelect", () => {
+    const { actions } = setup({ coarsePointer: false });
+    const spy = spyRow(actions, "gui-capture-toggle");
+    const verb = screen.getByTestId("gui-capture-toggle");
+    expect(verb.querySelector('[data-icon="keyboard"]')).toBeTruthy();
+    expect(verb).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(verb);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith();
+  });
+
+  it("latches with the ringed arm recipe without leaving the 24px verb box", () => {
+    const { rerenderWith } = setup({ coarsePointer: false });
+    const verb = screen.getByTestId("gui-capture-toggle");
+    expect(verb.className).not.toContain("text-accent-green");
+    rerenderWith({ capture: true, input: { capture: true } });
+    expect(verb).toHaveAttribute("aria-pressed", "true");
+    expect(verb.className).toContain("text-accent-green");
+    // The ringed arm paints ring-inset, so the box geometry never moves.
+    expect(verb.className).toContain("ring-inset");
+    expect(verb.className).toContain("w-[24px]");
+  });
+
+  it("never folds: the verb renders at every width, ⚙ or not", () => {
+    // Full fit with the capture reserve spent: 500 − 29 ≥ 377.
+    mockWidths(500, { ...PROBE, capture: 29 });
+    setup({ coarsePointer: false, geometry: "1920x1080", width: 1920, height: 1080 });
+    expect(screen.getByTestId("gui-capture-toggle")).toBeTruthy();
+    expect(screen.queryByTestId("gui-toolbar-overflow")).toBeNull();
+    cleanup();
+    vi.restoreAllMocks();
+
+    // The reserve spends degradation first: 380 − 29 = 351 < 377 degrades the
+    // quality label, nothing folds.
+    mockWidths(380, { ...PROBE, capture: 29 });
+    setup({ coarsePointer: false, geometry: "1920x1080", width: 1920, height: 1080 });
+    expect(screen.getByTestId("gui-capture-toggle")).toBeTruthy();
+    expect(screen.getByLabelText("Quality")).toHaveTextContent("◐");
+    expect(screen.queryByTestId("gui-toolbar-overflow")).toBeNull();
+    cleanup();
+    vi.restoreAllMocks();
+
+    // The narrowest spring folds the WHOLE ladder into ⚙ — the capture verb
+    // stays (the escape hatch that cannot fail).
+    mockWidths(70, { ...PROBE, capture: 29 });
+    setup({ coarsePointer: false, geometry: "1920x1080", width: 1920, height: 1080 });
+    expect(screen.getByTestId("gui-capture-toggle")).toBeTruthy();
+    expect(screen.getByTestId("gui-toolbar-overflow")).toBeTruthy();
+    expect(screen.queryByTestId("gui-toolbar-resolution")).toBeNull();
+  });
+
+  it("is omitted on a coarse pointer, folded or not", () => {
+    setup({ coarsePointer: true });
+    expect(screen.queryByTestId("gui-capture-toggle")).toBeNull();
+    cleanup();
+    vi.restoreAllMocks();
+
+    mockWidths(270, PROBE);
+    setup({ coarsePointer: true });
+    expect(screen.getByTestId("gui-toolbar-overflow")).toBeTruthy();
+    expect(screen.queryByTestId("gui-capture-toggle")).toBeNull();
   });
 });
 

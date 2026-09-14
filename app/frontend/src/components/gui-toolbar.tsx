@@ -14,8 +14,14 @@
  * quality label, coarse sizing). The priority ladder: 1 screen size ·
  * 2 zoom (`− fit +`) · 3 quality · 4 input (`⎘ ⌥`) · 5 launch (`▣ ◍`) ·
  * 6 health (`∿ ↻`); a label degrades one step before its item folds, and the
- * `⚙` pinned block renders only while something is actually folded (the
- * two-pass reserve — see the module). Collapse-first: the fold state starts
+ * pinned block renders at the cluster's tail. The block holds the keyboard
+ * capture verb as a PERMANENT member whenever its palette row exists (fine
+ * pointers — the chord gate the verb toggles never sees touch input), plus
+ * the `⚙` toggle only while something is actually folded (the two-pass
+ * reserve — see the module). The permanent member's probed width is
+ * subtracted from the fit budget up front, so the verb can never fold or
+ * clip, and the reserve never causes the fold that justifies the `⚙`.
+ * Collapse-first: the fold state starts
  * null and is set in a useLayoutEffect BEFORE paint, so no overflowing frame
  * ever renders.
  *
@@ -66,6 +72,7 @@ import { GUI_QUALITY_LABELS, nextGuiQuality, type GuiQuality } from "@/lib/gui-p
 import {
   BrowserGlyph,
   GearGlyph,
+  KeyboardGlyph,
   PasteGlyph,
   ReconnectGlyph,
   SendKeyGlyph,
@@ -151,6 +158,9 @@ interface GuiToolbarProps {
    *  `gui-quality-<nextGuiQuality(quality)>` row (the cycle). */
   quality: GuiQuality;
   statsVisible: boolean;
+  /** The keyboard-capture latch (`rk-gui-capture`) — the pinned block's
+   *  capture verb latches green while set. */
+  capture: boolean;
   /** The host signal's geometry/width/height/locked — the size chip's label. */
   geometry: string;
   width: number;
@@ -174,6 +184,7 @@ export function GuiToolbar({
   coarsePointer,
   quality,
   statsVisible,
+  capture,
   geometry,
   width,
   height,
@@ -221,6 +232,9 @@ export function GuiToolbar({
   const browserRow = byId.get("gui-open-browser");
   const statsRow = byId.get("gui-stats-hide") ?? byId.get("gui-stats-show");
   const reconnectRow = byId.get("gui-reconnect");
+  // The pinned block's permanent member (fine pointers only — the palette
+  // omits the row on coarse). It is NOT a ladder item: it can never fold.
+  const captureRow = byId.get("gui-capture-toggle");
   const hasResolution = actions.some((a) => a.id.startsWith("gui-res-"));
 
   // The size chip reads the stream entry's live size; a zeroed entry falls
@@ -251,7 +265,8 @@ export function GuiToolbar({
   // (connection state, reachability), not on every render; width changes
   // with an UNCHANGED set (a new geometry label, coarse flip) re-fit through
   // the observed probe instead.
-  const candidateKey = items.map((i) => i.id).join(",") + `|${coarsePointer}`;
+  const candidateKey =
+    items.map((i) => i.id).join(",") + `|${coarsePointer}|${captureRow ? "cap" : ""}`;
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -270,6 +285,11 @@ export function GuiToolbar({
       }));
       const pinnedW = widths.get("pinned") ?? 0;
       const dividerW = widths.get("divider") ?? 0;
+      // The pinned block's PERMANENT member (the capture verb) renders at
+      // every width, so its probed width leaves the budget up front in BOTH
+      // modes. `pinnedWidth` keeps covering the conditional `⚙` alone (the
+      // two-pass rule).
+      const captureW = widths.get("capture") ?? 0;
 
       // Centred mode is decided BEFORE the fold, because the two modes have
       // different budgets and fitting against the wrong one would place items
@@ -289,7 +309,7 @@ export function GuiToolbar({
         const leftBlock = rootRect.left - contentLeft;
         // The frame verbs sit outside the spring; the pinned block sits at the
         // spring's right end, so it counts toward the right side too.
-        const rightBlock = contentRight - rootRect.right + pinnedW;
+        const rightBlock = contentRight - rootRect.right + pinnedW + captureW;
         const clear = GUI_TOOLBAR_CENTRE_CLEARANCE_PX;
         // Centred, the cluster may only use the SYMMETRIC middle.
         centredBudget = hw - 2 * Math.max(leftBlock, rightBlock) - 2 * clear;
@@ -300,7 +320,7 @@ export function GuiToolbar({
         // all but one. Compare against what right-aligned would show and give
         // up centring the moment it would hide or degrade anything extra.
         const rightFold = computeGuiToolbarFold(
-          root.clientWidth,
+          root.clientWidth - captureW,
           foldItems,
           pinnedW,
           dividerW,
@@ -332,7 +352,7 @@ export function GuiToolbar({
         computeGuiToolbarFold(
           // Centred fits the symmetric middle the decision above validated;
           // right-aligned keeps today's full-spring budget.
-          centred !== null ? centredBudget : root.clientWidth,
+          centred !== null ? centredBudget : root.clientWidth - captureW,
           foldItems,
           pinnedW,
           dividerW,
@@ -562,33 +582,55 @@ export function GuiToolbar({
             );
           })}
         </span>
-        {showGear ? (
+        {showGear || captureRow ? (
           <span className="flex items-center shrink-0">
             <span aria-hidden="true" className={HEADER_DIVIDER_CLASS} />
-            <Tip label="More controls" note={`${foldedItems.length} folded`}>
-              <button
-                ref={gearRef}
-                type="button"
-                data-testid="gui-toolbar-overflow"
-                aria-label="More controls"
-                aria-haspopup="menu"
-                aria-expanded={toolbarVisible}
-                onClick={() => {
-                  // One menu at a time (the single-openMenu predecessor's rule).
-                  setResolutionOpen(false);
-                  onToolbarVisibleChange(!toolbarVisible);
-                }}
-                className={controlClass({
-                  variant: "toggle",
-                  base: HEADER_VERB_BASE,
-                  rest: "hover:bg-bg-inset hover:text-text-primary",
-                  ringed: true,
-                  pressed: toolbarVisible,
-                })}
-              >
-                <GearGlyph />
-              </button>
-            </Tip>
+            {captureRow ? (
+              <Tip label="Keyboard capture" kbd={kbdFor("gui-capture-toggle")}>
+                <button
+                  type="button"
+                  data-testid="gui-capture-toggle"
+                  aria-label="Keyboard capture"
+                  aria-pressed={capture}
+                  onClick={() => captureRow.onSelect()}
+                  className={controlClass({
+                    variant: "toggle",
+                    base: HEADER_VERB_BASE,
+                    rest: "hover:bg-bg-inset hover:text-text-primary",
+                    ringed: true,
+                    pressed: capture,
+                  })}
+                >
+                  <KeyboardGlyph />
+                </button>
+              </Tip>
+            ) : null}
+            {showGear ? (
+              <Tip label="More controls" note={`${foldedItems.length} folded`}>
+                <button
+                  ref={gearRef}
+                  type="button"
+                  data-testid="gui-toolbar-overflow"
+                  aria-label="More controls"
+                  aria-haspopup="menu"
+                  aria-expanded={toolbarVisible}
+                  onClick={() => {
+                    // One menu at a time (the single-openMenu predecessor's rule).
+                    setResolutionOpen(false);
+                    onToolbarVisibleChange(!toolbarVisible);
+                  }}
+                  className={controlClass({
+                    variant: "toggle",
+                    base: HEADER_VERB_BASE,
+                    rest: "hover:bg-bg-inset hover:text-text-primary",
+                    ringed: true,
+                    pressed: toolbarVisible,
+                  })}
+                >
+                  <GearGlyph />
+                </button>
+              </Tip>
+            ) : null}
           </span>
         ) : null}
       </TipGroup>
@@ -612,8 +654,9 @@ export function GuiToolbar({
         />
       ) : null}
       {/* Hidden measurement probe — every candidate in BOTH label forms, one
-          divider, and the pinned block (divider + ⚙), so the fit reads real
-          widths and nothing is hardcoded. `inert` + aria-hidden + off-screen:
+          divider, the capture verb's permanent pinned block (divider + ⌨),
+          and the conditional ⚙ pinned block (divider + ⚙), so the fit reads
+          real widths and nothing is hardcoded. `inert` + aria-hidden + off-screen:
           the duplicated controls can never receive focus or clicks. */}
       <div
         ref={probeRef}
@@ -635,8 +678,21 @@ export function GuiToolbar({
             </span>
           ))}
         <span data-fold="divider" className={HEADER_DIVIDER_CLASS} />
+        {captureRow ? (
+          <span data-fold="capture" className="flex items-center shrink-0">
+            <span className={HEADER_DIVIDER_CLASS} />
+            <button type="button" tabIndex={-1} className={HEADER_VERB_CLASS}>
+              <KeyboardGlyph />
+            </button>
+          </span>
+        ) : null}
+        {/* The rendered pinned block carries ONE leading divider for the whole
+            run, so only the FIRST member probes it: with capture present the
+            `capture` probe owns it and the gear measures bare, otherwise the
+            gear owns it. Probing it twice over-reserved a divider and folded a
+            ladder item a few px early. */}
         <span data-fold="pinned" className="flex items-center shrink-0">
-          <span className={HEADER_DIVIDER_CLASS} />
+          {captureRow ? null : <span className={HEADER_DIVIDER_CLASS} />}
           <button type="button" tabIndex={-1} className={HEADER_VERB_CLASS}>
             <GearGlyph />
           </button>

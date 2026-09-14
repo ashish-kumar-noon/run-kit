@@ -242,6 +242,10 @@ interface SurfaceLayoutProps {
    *  app.tsx) and its seam. */
   guiToolbarVisible?: boolean;
   onGuiToolbarVisibleChange?: (visible: boolean) => void;
+  /** The keyboard-capture latch (`rk-gui-capture`, owned by app.tsx) — while
+   *  set, the gui header's meta chip reads `keys → desktop` and the pinned
+   *  block's capture verb latches. */
+  guiCapture?: boolean;
   guiResizeLocked?: boolean;
   guiQuality?: GuiQuality;
   guiStatsVisible?: boolean;
@@ -617,6 +621,7 @@ export function SurfaceLayout({
   onGuiKeyBarVisibleChange,
   guiToolbarVisible = false,
   onGuiToolbarVisibleChange,
+  guiCapture = false,
   guiResizeLocked = false,
   guiQuality = "balanced",
   guiStatsVisible = false,
@@ -1730,7 +1735,11 @@ export function SurfaceLayout({
     const suffix = occ > 0 ? `-${occ + 1}` : "";
     const testId = `surface-tile-${kind}${suffix}`;
     const label = SURFACE_LABEL[kind];
-    const meta = tileMeta(kind, win, gui);
+    // The keyboard-capture latch swaps the gui meta chip to its CONSEQUENCE
+    // label — words, not hue alone: green wash + ink, no ring (a label, not
+    // a control).
+    const guiCaptured = kind === "gui" && guiCapture;
+    const meta = guiCaptured ? "keys → desktop" : tileMeta(kind, win, gui);
     // Web tile header (260819-v6y4 R10): a kind badge (hues per the approved
     // design study — green=present, amber=proxied port, blue=external) plus
     // the page title reported up from the iframe, falling back to the
@@ -1863,7 +1872,13 @@ export function SurfaceLayout({
               <>
                 <span className="shrink-0 text-text-primary">{label}</span>
                 {meta && (
-                  <span className="min-w-0 truncate rounded bg-bg-inset px-1.5 text-[10px] text-text-secondary">
+                  <span
+                    className={`min-w-0 truncate rounded px-1.5 text-[10px] ${
+                      guiCaptured
+                        ? "bg-accent-green/15 text-accent-green"
+                        : "bg-bg-inset text-text-secondary"
+                    }`}
+                  >
                     {meta}
                   </span>
                 )}
@@ -1879,6 +1894,7 @@ export function SurfaceLayout({
                 coarsePointer={coarsePointer}
                 quality={guiQuality}
                 statsVisible={guiStatsVisible}
+                capture={guiCapture}
                 geometry={gui.geometry}
                 width={gui.width}
                 height={gui.height}

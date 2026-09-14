@@ -69,6 +69,7 @@ import {
   readGuiHidpi,
   readGuiKeyBarVisible,
   readGuiToolbarVisible,
+  readGuiCapture,
   stepGuiZoom,
   writeGuiPointerMode,
   writeGuiQuality,
@@ -78,6 +79,7 @@ import {
   writeGuiHidpi,
   writeGuiKeyBarVisible,
   writeGuiToolbarVisible,
+  writeGuiCapture,
   type GuiPointerMode,
   type GuiQuality,
   type GuiZoom,
@@ -1305,6 +1307,14 @@ function AppShell() {
     setGuiToolbarVisible(visible);
     writeGuiToolbarVisible(visible);
   }, []);
+  // The keyboard-capture latch (`rk-gui-capture`) — the same seed-from-storage
+  // + write-through grammar. While latched the gui chord gate hands every
+  // chord but the release binding to the guest desktop.
+  const [guiCapture, setGuiCapture] = useState(() => readGuiCapture());
+  const handleGuiCaptureChange = useCallback((on: boolean) => {
+    setGuiCapture(on);
+    writeGuiCapture(on);
+  }, []);
   // The Send key prompt's open state (the palette's `GUI: Send key…` row opens
   // it; the prompt owns parsing/validation).
   const [guiSendKeyOpen, setGuiSendKeyOpen] = useState(false);
@@ -1510,6 +1520,7 @@ function AppShell() {
       hidpi: guiHidpi,
       keyBarVisible: guiKeyBarVisible,
       toolbarVisible: guiToolbarVisible,
+      capture: guiCapture,
       geometry: gui?.geometry ?? "",
       supervisorAvailable: rkGuiWindow !== null,
       onTurnOn: () => {
@@ -1554,6 +1565,7 @@ function AppShell() {
       onHidpiChange: handleGuiHidpiChange,
       onKeyBarVisibleChange: handleGuiKeyBarVisibleChange,
       onToolbarVisibleChange: handleGuiToolbarVisibleChange,
+      onCaptureChange: handleGuiCaptureChange,
       onSendKey: () => setGuiSendKeyOpen(true),
       onOpenLogs: openGuiLogs,
       onReconnect: () => guiCommandsRef.current?.reconnect(),
@@ -1587,6 +1599,8 @@ function AppShell() {
     handleGuiKeyBarVisibleChange,
     guiToolbarVisible,
     handleGuiToolbarVisibleChange,
+    guiCapture,
+    handleGuiCaptureChange,
     rkGuiWindow,
     guiOffRequest,
     loadDesktopRows,
@@ -1866,8 +1880,10 @@ function AppShell() {
   // only inside the WEB tile's frame (code-server keeps its own find).
   const reclaimChordForKind = useCallback(
     (kind: SurfaceKind) => (e: KeyboardEvent) =>
-      hasReclaimableMatch(e, keybindings.bindings, kind),
-    [keybindings.bindings],
+      // The capture latch narrows the GUI reclaim to the release binding
+      // alone; the code/web iframe paths never see the flag.
+      hasReclaimableMatch(e, keybindings.bindings, kind, kind === "gui" && guiCapture),
+    [keybindings.bindings, guiCapture],
   );
 
   // The docked compose strip is a single global surface (260718-dhdj) rendered
@@ -4946,6 +4962,11 @@ function AppShell() {
       "gui-zoom-in": guiGated("gui-zoom-in", () => handleGuiZoomChange(stepGuiZoom(guiZoom, 1))),
       "gui-zoom-out": guiGated("gui-zoom-out", () => handleGuiZoomChange(stepGuiZoom(guiZoom, -1))),
       "gui-zoom-fit": guiGated("gui-zoom-fit", () => handleGuiZoomChange("fit")),
+      // ⌘⇧G/Ctrl+Shift+G keyboard capture — the chord gate's escape hatch.
+      // Present only while the gui tile owns focus (the guiOnly gate); the
+      // narrowed reclaim predicate is what delivers the chord here while
+      // every other chord passes to the guest.
+      "gui-capture-toggle": guiGated("gui-capture-toggle", () => handleGuiCaptureChange(!guiCapture)),
       // ⌘1/⌘2/⌘3 tile chords (R4) — see `tileChord` above for the three-state
       // rule, gating, and the recording constraint. A window without the
       // surface (`availableTiles`) mounts no handler and the chord falls
@@ -4991,7 +5012,7 @@ function AppShell() {
       // ring) gates the chord for free.
       "layout-cycle": fromPalette("layout-cycle"),
     };
-  }, [paletteActions, paletteGlobals, server, windowParam, macros, sessionName, executeMacro, toggleComposeStrip, composeStripEnabled, addToast, isMobile, panelSurfaces, togglePanel, restoreFocus, bindingByAction, focusedTileKind, layout, toggleZen, guiZoom, handleGuiZoomChange]);
+  }, [paletteActions, paletteGlobals, server, windowParam, macros, sessionName, executeMacro, toggleComposeStrip, composeStripEnabled, addToast, isMobile, panelSurfaces, togglePanel, restoreFocus, bindingByAction, focusedTileKind, layout, toggleZen, guiZoom, handleGuiZoomChange, guiCapture, handleGuiCaptureChange]);
   useKeybindingDispatch(keybindingHandlers);
 
   const displayName = currentWindow?.name ?? windowParam ?? "";
@@ -5475,6 +5496,7 @@ function AppShell() {
               onGuiKeyBarVisibleChange={handleGuiKeyBarVisibleChange}
               guiToolbarVisible={guiToolbarVisible}
               onGuiToolbarVisibleChange={handleGuiToolbarVisibleChange}
+              guiCapture={guiCapture}
               guiResizeLocked={guiResizeLocked}
               guiQuality={guiQuality}
               guiStatsVisible={guiStatsVisible}

@@ -1,0 +1,55 @@
+id: 31eg
+name: 260912-31eg-gui-keyboard-capture
+created: 2026-09-12T19:07:37Z
+created_by: ashish-kumar-noon
+change_type: feat
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: active
+    review-pr: pending
+plan:
+    generated: true
+    task_count: 9
+    acceptance_count: 21
+    acceptance_completed: 21
+confidence:
+    certain: 14
+    confident: 3
+    tentative: 1
+    unresolved: 0
+    score: 4.0
+    fuzzy: true
+    dimensions:
+        signal: 83.1
+        reversibility: 83.9
+        competence: 87.5
+        disambiguation: 84.7
+stage_metrics:
+    intake: {started_at: "2026-09-12T19:07:37Z", driver: fab-new, iterations: 1, completed_at: "2026-09-12T20:44:15Z"}
+    apply: {started_at: "2026-09-12T20:44:15Z", driver: fab-fff, iterations: 1, completed_at: "2026-09-13T08:46:56Z"}
+    review: {started_at: "2026-09-13T08:46:56Z", driver: fab-ff, iterations: 1, completed_at: "2026-09-14T10:21:17Z"}
+    hydrate: {started_at: "2026-09-14T10:21:17Z", driver: fab-ff, iterations: 1, completed_at: "2026-09-14T10:32:01Z"}
+    ship: {started_at: "2026-09-14T10:32:01Z", driver: fab-ff, iterations: 1}
+prs: []
+change_type_source: explicit
+true_impact:
+    added: 1684
+    deleted: 59
+    net: 1625
+    excluding:
+        added: 664
+        deleted: 59
+        net: 605
+    tests:
+        added: 377
+        deleted: 14
+        net: 363
+    computed_at: "2026-09-14T10:32:01Z"
+    computed_at_stage: hydrate
+summary: 'gui keyboard capture: the rk-gui-capture latch narrows the gui chord gate to the gui-capture-toggle release binding (Ctrl+Shift+G/⌘⇧G) so every other chord reaches the guest desktop; pinned never-folding KeyboardGlyph verb, keys → desktop meta chip, one state-labelled palette row'
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-09-14T10:32:01Z

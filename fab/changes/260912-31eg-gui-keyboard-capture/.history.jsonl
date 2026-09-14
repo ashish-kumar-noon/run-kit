@@ -1,0 +1,9 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-09-12T19:07:37Z"}
+{"args":"GUI keyboard capture — hand rk's chords to the guest desktop: a latched capture toggle that narrows the gui tile's chord gate to a single reserved release binding (gui-capture-toggle, guiOnly, shifted KeyG), dropped into the pinned block reserved by 260912-lut4-gui-toolbar-header-fold","cmd":"fab-new","event":"command","ts":"2026-09-12T19:07:37Z"}
+{"delta":"+4.0","event":"confidence","score":4,"trigger":"calc-score","ts":"2026-09-12T19:12:30Z"}
+{"delta":"+0.0","event":"confidence","score":4,"trigger":"calc-score","ts":"2026-09-12T19:13:02Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"apply","ts":"2026-09-12T20:44:15Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"review","ts":"2026-09-13T08:46:56Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"hydrate","ts":"2026-09-14T10:21:17Z"}
+{"event":"review","result":"passed","ts":"2026-09-14T10:21:17Z"}
+{"action":"enter","driver":"fab-ff","event":"stage-transition","stage":"ship","ts":"2026-09-14T10:32:01Z"}

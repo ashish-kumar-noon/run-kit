@@ -398,6 +398,13 @@ export const DEFAULT_BINDINGS: readonly KeyBinding[] = [
   { actionId: "gui-zoom-in", code: "Equal", tier: "ctrl", scope: "terminal", kind: "builtin", label: "Zoom GUI in", mapLabel: "gui +", ignoreInputs: true, guiOnly: true },
   { actionId: "gui-zoom-out", code: "Minus", tier: "ctrl", scope: "terminal", kind: "builtin", label: "Zoom GUI out", mapLabel: "gui −", ignoreInputs: true, guiOnly: true },
   { actionId: "gui-zoom-fit", code: "Digit0", tier: "ctrl", scope: "terminal", kind: "builtin", label: "Zoom GUI to fit", mapLabel: "gui fit", ignoreInputs: true, guiOnly: true },
+  // ⌘⇧G/Ctrl+Shift+G keyboard capture (the gui chord gate's escape hatch):
+  // while capture is latched the reclaim predicate narrows to THIS actionId
+  // alone, so every other chord falls through the gui canvas's capture-phase
+  // gate to the guest desktop. `guiOnly` confines the chord to gui-tile focus
+  // (handler presence + the reclaim predicate) and the terminal seam never
+  // refuses it; KeyG is unclaimed in the shifted tier on every host.
+  { actionId: "gui-capture-toggle", code: "KeyG", tier: "shifted", scope: "terminal", kind: "builtin", label: "Keyboard capture", description: "hand every chord to the guest desktop", mapLabel: "capture", ignoreInputs: true, guiOnly: true },
   { actionId: "board-cycle-next", code: "BracketRight", tier: "cmd", scope: "board", kind: "builtin", label: "Cycle pane focus →" },
   { actionId: "board-cycle-prev", code: "BracketLeft", tier: "cmd", scope: "board", kind: "builtin", label: "Cycle pane focus ←" },
 ];
@@ -590,12 +597,24 @@ export function findMatches(
  * a gated and an ungated binding is still reclaimed (`.some` semantics) — the
  * ungated match has a global meaning. For `"code"` the result is
  * byte-identical to the pre-kind-aware predicate on every pre-ie2i binding.
+ *
+ * `captured` is the gui tile's keyboard-capture latch: when set, the
+ * predicate narrows to the single `gui-capture-toggle` actionId — every
+ * other chord returns `false` and falls through the gui canvas's
+ * capture-phase gate to the guest desktop, so the release chord is the only
+ * keyboard route back. Callers pass it only for kind `"gui"`; with it unset
+ * (the default) the predicate is byte-identical to the pre-capture behavior
+ * on every kind.
  */
 export function hasReclaimableMatch(
   e: ChordEvent,
   bindings: readonly EffectiveBinding[],
   kind: ViewName,
+  captured = false,
 ): boolean {
+  if (captured) {
+    return findMatches(e, bindings).some((b) => b.actionId === "gui-capture-toggle");
+  }
   return findMatches(e, bindings).some((b) => {
     if (b.ttyOnly) return false;
     if (b.webOnly) return kind === "web";
