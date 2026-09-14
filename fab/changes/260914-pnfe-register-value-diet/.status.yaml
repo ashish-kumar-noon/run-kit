@@ -1,0 +1,57 @@
+id: pnfe
+name: 260914-pnfe-register-value-diet
+created: 2026-09-14T16:02:51Z
+created_by: Sahil Ahuja
+change_type: feat
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: done
+    review-pr: done
+plan:
+    generated: true
+    task_count: 14
+    acceptance_count: 23
+    acceptance_completed: 23
+confidence:
+    certain: 10
+    confident: 2
+    tentative: 0
+    unresolved: 0
+    score: 4.8
+    fuzzy: true
+    dimensions:
+        signal: 87.5
+        reversibility: 89.6
+        competence: 87.9
+        disambiguation: 87.1
+stage_metrics:
+    intake: {started_at: "2026-09-14T16:02:51Z", driver: fab-new, iterations: 1, completed_at: "2026-09-14T16:10:05Z"}
+    apply: {started_at: "2026-09-14T16:10:05Z", driver: fab-fff, iterations: 1, completed_at: "2026-09-14T16:28:54Z"}
+    review: {started_at: "2026-09-14T16:28:54Z", driver: fab-fff, iterations: 1, completed_at: "2026-09-14T16:34:30Z"}
+    hydrate: {started_at: "2026-09-14T16:34:30Z", driver: fab-fff, iterations: 1, completed_at: "2026-09-14T16:39:30Z"}
+    ship: {started_at: "2026-09-14T16:39:30Z", driver: fab-fff, iterations: 1, completed_at: "2026-09-14T16:42:21Z"}
+    review-pr: {started_at: "2026-09-14T16:42:21Z", driver: git-pr, iterations: 1, completed_at: "2026-09-14T16:54:59Z"}
+prs:
+    - https://github.com/sahil87/run-kit/pull/978
+change_type_source: explicit
+true_impact:
+    added: 1064
+    deleted: 218
+    net: 846
+    excluding:
+        added: 510
+        deleted: 195
+        net: 315
+    tests:
+        added: 134
+        deleted: 43
+        net: 91
+    computed_at: "2026-09-14T16:42:21Z"
+    computed_at_stage: ship
+summary: 'register value diet: fab resolvers branch-aware (slug written once), tmx %id-first, cwd basename-first two-span, out flowing/idle grammar, dim git date prefix, FAB_STATE_COLORS state-token hue'
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-09-14T16:54:59Z
