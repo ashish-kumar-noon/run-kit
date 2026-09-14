@@ -10,7 +10,30 @@ import type { WindowInfo } from "@/types";
  * panel's `WindowContent` and the sidebar row-hover flyout card
  * (`row-flyout-card.tsx`) — render from ONE source and cannot drift. Pure
  * functions over the streamed `WindowInfo`; no React.
+ *
+ * The `tmx` identity-row label (`getTmxLabel`) also lives here — it is pane
+ * metadata, not a register, but it has three consumers (the PANE panel, the
+ * status-bar strip, the status-bar overflow row) that must render one string.
  */
+
+/**
+ * Build the `tmx` identity-row label: `pane <ordinal>/<count>[ <paneId>]`.
+ * The ordinal is the ACTIVE pane's 1-based position in `win.panes` — never
+ * `paneIndex + 1`: `paneIndex` is tmux's `#{pane_index}`, which already
+ * honours `pane-base-index`, so re-offsetting it reads `pane 2/1` for a single
+ * pane under base-index 1. The id suffix comes ONLY from the active pane —
+ * consumers copy `activePane.paneId`, and a label must never show an id that
+ * nothing copies — so with no pane marked active the ordinal falls back to 1
+ * and no id is shown (a pane-less window reads `pane 1/0`); an empty active
+ * `paneId` likewise drops the suffix.
+ */
+export function getTmxLabel(win: WindowInfo): string {
+  const panes = win.panes ?? [];
+  const activeIdx = panes.findIndex((p) => p.isActive);
+  const ordinal = (activeIdx >= 0 ? activeIdx : 0) + 1;
+  const paneId = activeIdx >= 0 ? panes[activeIdx].paneId : "";
+  return `pane ${ordinal}/${panes.length}${paneId ? ` ${paneId}` : ""}`;
+}
 
 /**
  * Build the L0 `out` register string. L0 speaks about bytes, not intent:
