@@ -53,5 +53,6 @@ true_impact:
     computed_at: "2026-09-15T18:32:28Z"
     computed_at_stage: ship
 summary: sidebar/top bar/status bar/stage ground moved to derived chrome tokens (--color-bg-chrome / --color-bg-chrome-raised); memory re-stated to the chrome material present truth
+base_branch: main
 # true_impact: lazily created on first stage-finish that computes it (no placeholder here).
-last_updated: 2026-09-15T22:24:07Z
+last_updated: 2026-09-15T22:29:31Z
