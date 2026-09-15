@@ -1,0 +1,57 @@
+id: rl0c
+name: 260914-rl0c-reef-hd-flair
+created: 2026-09-14T08:03:15Z
+created_by: droid-ash
+change_type: feat
+issues: []
+progress:
+    intake: done
+    apply: done
+    review: done
+    hydrate: done
+    ship: active
+    review-pr: pending
+plan:
+    generated: true
+    task_count: 33
+    acceptance_count: 52
+    acceptance_completed: 52
+confidence:
+    certain: 6
+    confident: 4
+    tentative: 0
+    unresolved: 0
+    score: 4.8
+    fuzzy: true
+    dimensions:
+        signal: 79.5
+        reversibility: 87.0
+        competence: 87.5
+        disambiguation: 82.5
+stage_metrics:
+    intake: {started_at: "2026-09-14T08:03:15Z", driver: fab-new, iterations: 1, completed_at: "2026-09-14T08:13:13Z"}
+    apply: {started_at: "2026-09-15T04:19:23Z", driver: fab-ff, iterations: 22, completed_at: "2026-09-15T04:19:38Z"}
+    review: {started_at: "2026-09-15T04:19:38Z", driver: fab-ff, iterations: 22, completed_at: "2026-09-15T04:25:02Z"}
+    hydrate: {started_at: "2026-09-15T04:25:02Z", driver: fab-ff, iterations: 13, completed_at: "2026-09-15T04:28:55Z"}
+    ship: {started_at: "2026-09-15T04:28:55Z", driver: fab-ff, iterations: 13}
+    review-pr: {iterations: 1}
+prs:
+    - https://github.com/sahil87/run-kit/pull/981
+change_type_source: explicit
+true_impact:
+    added: 1210
+    deleted: 65
+    net: 1145
+    excluding:
+        added: 400
+        deleted: 48
+        net: 352
+    tests:
+        added: 5
+        deleted: 5
+        net: 0
+    computed_at: "2026-09-15T04:28:55Z"
+    computed_at_stage: hydrate
+summary: 'Adds the `nemo` flair — an HD vector sibling of `aquarium` inserted immediately after it as the 16th named state: the same scene measurement-for-measurement (sizes, speeds, off-screen timing, cadences), redrawn as bezier gradient art with continuous eased articulation, its two fish in real reef-species colouring (ocellaris clownfish, regal blue tang)'
+# true_impact: lazily created on first stage-finish that computes it (no placeholder here).
+last_updated: 2026-09-15T04:28:55Z

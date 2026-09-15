@@ -27,7 +27,7 @@ const rgb = (hex: string): string => {
   return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
 };
 
-/** The 14 named flair states (band order; − clear cell lives in the band header). */
+/** The 16 named flair states (band order; − clear cell lives in the band header). */
 const FLAIR_NAMED = FLAIR_STATES.slice(1);
 
 // Minimal ThemeProvider wrapper for tests
@@ -354,9 +354,9 @@ describe("SwatchPopover", () => {
       return { onSelect, onSelectFlair, onClose, ...utils };
     }
 
-    it("full variant: 30 colors + 15 flairs + 2 header − + panel − + ✕ = 49 options, labelled Label picker", () => {
+    it("full variant: 30 colors + 16 flairs + 2 header − + panel − + ✕ = 50 options, labelled Label picker", () => {
       renderLabelPicker();
-      expect(screen.getAllByRole("option")).toHaveLength(49);
+      expect(screen.getAllByRole("option")).toHaveLength(50);
       expect(screen.getByRole("listbox").getAttribute("aria-label")).toBe("Label picker");
       for (const state of FLAIR_NAMED) {
         expect(screen.getByRole("option", { name: `Flair ${state}` })).toBeTruthy();
@@ -390,7 +390,7 @@ describe("SwatchPopover", () => {
       expect(values.slice(0, 6)).toEqual(["red-light", "red", "red-dark", "orange-light", "orange", "orange-dark"]);
     });
 
-    it("the flair band lists the 14 states in display order, rain/scan leading, ironman last", () => {
+    it("the flair band lists the 16 states in display order, rain/scan leading, noon last", () => {
       renderLabelPicker();
       const cells = Array.from(
         screen.getByRole("listbox").querySelectorAll("[data-flair-value]"),
@@ -618,11 +618,11 @@ describe("SwatchPopover", () => {
       arrow("ArrowDown"); // light row, col 0
       arrow("ArrowRight", 9); // col 9 (slate-light)
       // Down into the flair band: the raw column rides THROUGH the
-      // single-cell header − row at the goal column and clamps to 7, noon, on the
-      // 8-cell flair row 1.
+      // single-cell header − row at the goal column and clamps to 7, ironman,
+      // on the 8-cell flair row 1.
       arrow("ArrowDown", 4);
       enter();
-      expect(onSelectFlair).toHaveBeenLastCalledWith("noon");
+      expect(onSelectFlair).toHaveBeenLastCalledWith("ironman");
       // Back up: flair row 1 → header − → dark shade row, the raw column
       // restored (col 9 = slate-dark).
       arrow("ArrowUp", 2);
@@ -639,26 +639,26 @@ describe("SwatchPopover", () => {
       expect(onSelect).not.toHaveBeenCalled();
     });
 
-    it("flair row 1 walks 8 columns and row 2 walks 7 (rain/nyan/… over scan/naruto/…)", () => {
+    it("flair row 1 walks 8 columns and row 2 walks 8 (rain/nyan/… over scan/naruto/…)", () => {
       const { onSelectFlair, enter, arrow } = renderFull();
       // Uncolored → color header −. Down 5 → flair row 1, col 0, rain.
       arrow("ArrowDown", 5);
       enter();
       expect(onSelectFlair).toHaveBeenLastCalledWith("rain");
-      // Walk row 1 right: nyan, onepiece, matrix, roadrunner, cube, spidey,
-      // noon — clamped at the 8th cell.
-      for (const state of ["nyan", "onepiece", "matrix", "roadrunner", "cube", "spidey", "noon", "noon"]) {
+      // Walk row 1 right: nyan, onepiece, matrix, nemo, invaders, warp,
+      // ironman — clamped at the 8th cell.
+      for (const state of ["nyan", "onepiece", "matrix", "nemo", "invaders", "warp", "ironman", "ironman"]) {
         arrow("ArrowRight");
         enter();
         expect(onSelectFlair).toHaveBeenLastCalledWith(state);
       }
-      // Down to row 2 in the same column: noon (row 1 col 7) → ironman (row 2
-      // col 6, clamped — row 2 is one cell shorter).
+      // Down to row 2 in the same column: ironman (row 1 col 7) → noon (row 2
+      // col 7 — both rows are 8 cells, no clamp).
       arrow("ArrowDown");
       enter();
-      expect(onSelectFlair).toHaveBeenLastCalledWith("ironman");
-      // Row 2 walks left: warp, invaders, aquarium, pacman, naruto, scan — clamped.
-      for (const state of ["warp", "invaders", "aquarium", "pacman", "naruto", "scan", "scan"]) {
+      expect(onSelectFlair).toHaveBeenLastCalledWith("noon");
+      // Row 2 walks left: spidey, cube, roadrunner, aquarium, pacman, naruto, scan — clamped.
+      for (const state of ["spidey", "cube", "roadrunner", "aquarium", "pacman", "naruto", "scan", "scan"]) {
         arrow("ArrowLeft");
         enter();
         expect(onSelectFlair).toHaveBeenLastCalledWith(state);

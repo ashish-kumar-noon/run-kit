@@ -474,7 +474,7 @@ export const UNCOLORED_SELECTED_KEY = `${UNCOLORED_SELECTED_ANSI}`;
  *  scanlines + crawl + refresh band), now user-composable with ANY marker;
  *  both tint from `--rk-flair-color`. Mirrors the backend closed set minus the
  *  empty string, with `""` at the front. */
-export const FLAIR_STATES = ["", "rain", "scan", "nyan", "naruto", "onepiece", "pacman", "matrix", "aquarium", "roadrunner", "invaders", "cube", "warp", "spidey", "ironman", "noon"] as const;
+export const FLAIR_STATES = ["", "rain", "scan", "nyan", "naruto", "onepiece", "pacman", "matrix", "aquarium", "nemo", "roadrunner", "invaders", "cube", "warp", "spidey", "ironman", "noon"] as const;
 
 /** A flair state — one of FLAIR_STATES. */
 export type FlairState = (typeof FLAIR_STATES)[number];

@@ -18,7 +18,7 @@ var tabFlairCmd = &cobra.Command{
 	Short: "Set or clear the tab's per-row flair",
 	Long: "Write @rk_win_flair — the per-row flair animation the sidebar renders.\n" +
 		"Accepted values: rain, scan, nyan, naruto, onepiece, pacman, matrix,\n" +
-		"aquarium, roadrunner, invaders, cube, warp, spidey, ironman, noon.\n" +
+		"aquarium, nemo, roadrunner, invaders, cube, warp, spidey, ironman, noon.\n" +
 		"Prints the stored token on stdout; --off clears the option and prints\n" +
 		"nothing (also when already unset). Reads go through 'rk tab show'.",
 	Args:         cobra.RangeArgs(0, 2),

@@ -2212,15 +2212,15 @@ describe("Sidebar — server flair (group header + picker band)", () => {
     expect(flair.style.getPropertyValue("--rk-flair-color")).not.toBe("");
   });
 
-  it("the server picker renders the flair band (15 live cells) and a flair pick POSTs + mounts the overlay optimistically", async () => {
+  it("the server picker renders the flair band (16 live cells) and a flair pick POSTs + mounts the overlay optimistically", async () => {
     await renderWithFlairs({}); // alpha starts unflaired
 
     openPickerViaCard("alpha");
     const popover = screen.getByRole("listbox", { name: "Label picker" });
 
-    // The flair band is present — the 15 named states as data-flair-value cells.
+    // The flair band is present — the 16 named states as data-flair-value cells.
     const cells = popover.querySelectorAll("[data-flair-value]");
-    expect(cells).toHaveLength(15);
+    expect(cells).toHaveLength(16);
     expect(popover.querySelector("[data-flair-value='ironman']")).not.toBeNull();
 
     fireEvent.click(within(popover).getByRole("option", { name: "Flair cube" }));

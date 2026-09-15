@@ -625,8 +625,8 @@ summary {
 /* ── Flair overlays (decoration-only channel) ────────────────────────────────
    Always-on CSS-only overlays for rows carrying a flair value (`rain` / `scan` /
    `nyan` /
-   `naruto` / `onepiece` / `pacman` / `matrix` / `aquarium` / `roadrunner` /
-   `invaders` / `cube` / `warp` / `spidey` / `ironman`) — pure decoration: no wiring to
+   `naruto` / `onepiece` / `pacman` / `matrix` / `aquarium` / `nemo` /
+   `roadrunner` / `invaders` / `cube` / `warp` / `spidey` / `ironman` / `noon`) — pure decoration: no wiring to
    @rk_pane_agent_state or
    the status pyramid, and it animates in EVERY row state. Mounted on window
    and session rows (NOT server group headers) as an absolutely-positioned
@@ -647,7 +647,7 @@ summary {
      translateY range grows the compositor layer beyond the row box and the
      HTML5 drag-ghost snapshot then carries a sliver of the neighboring row
      along) and never `left` (layout thrash). The
-     cube/warp treatments animate transforms on dedicated CHILD SPANS instead
+     cube/warp/nemo treatments animate transforms on dedicated CHILD SPANS instead
      of the row pseudos — the sanctioned exception, guarded by hiding the
      whole overlay while its row is a drag source.
    - Each sprite is a VERTICAL sheet of 22px frames (frame n at y = -22n).
@@ -1041,6 +1041,293 @@ summary {
   animation:
     rk-flair-aquarium-x 22s linear infinite,
     rk-flair-aquarium-y 0.8s step-end infinite;
+}
+
+/* nemo: aquarium's scene redrawn in HD — the SAME cast on the SAME
+   measurements (an orange fish crossing LEFT→RIGHT once per 22s loop, a blue
+   fish crossing RIGHT→LEFT TWICE per loop, one seaweed clump 6px from the
+   left edge, rising bubbles), differing only in fidelity (bezier <path>
+   bodies with gradient shading — NO 1px rect scanline stacks, that
+   construction IS aquarium) and in motion quality (continuous eased tail,
+   fin and blade motion instead of aquarium's 2-frame step-end toggles).
+   The fish carry real reef-species colouring (a species pattern is a fact
+   about the animal, not copyrighted character art): the orange is an
+   ocellaris clownfish — bright orange with three vertical white bands edged
+   in fine black (one behind the eye, one mid-body widening forward toward
+   the head, one at the caudal peduncle), black-edged fins and a black iris;
+   the blue is a regal blue tang — royal blue with the black "palette"
+   marking hooking from the eye back along the upper body and down toward
+   the tail, and a canary yellow caudal fin. The band/palette markings are
+   clipped to the body outline by a clipPath inside each body SVG (ids are
+   scoped per data URI, so both fish may reuse id names — they are kept
+   distinct anyway).
+   Markup contract: the overlay holds (FlairOverlay renders them) TWO
+   <span class="rk-nemo-fish"> — .rk-nemo-orange then .rk-nemo-blue — each
+   holding .rk-nemo-tail, .rk-nemo-fin and .rk-nemo-body spans (DOM order IS
+   the paint order: tail and fin behind, body on top covering their roots),
+   plus ONE <span class="rk-nemo-weed"> of three .rk-nemo-blade spans;
+   bubbles ride the overlay's ::before. WHY every moving part is its OWN
+   element carrying its OWN art: a CSS animation inside an SVG data URI used
+   as background-image does not run in Chrome/Safari. Only a real element
+   can take a real transform, so each tail wags, each fin flutters and each
+   blade sways on its own eased loop (the sanctioned cube/warp exception to
+   the row transform ban — rows hide the overlay while drag-sourced).
+   Construction:
+   - Each .rk-nemo-fish span is a box the exact width of aquarium's sprite
+     sheet (orange 18px, blue 16px) and 22px tall, centred on the band
+     (top: 50%, margin-top: -11px), so the art — drawn at y≈5.6..14.5 of the
+     22px viewBox, the band aquarium's art occupies (its sheets draw at
+     y=7..14) — lands where aquarium's fish swim. opacity: 0.92 copies
+     aquarium's ::after strip opacity.
+   - The traversals copy aquarium's rk-flair-aquarium-x keyframes exactly.
+     A percentage background-position resolves against (container − image),
+     so aquarium's calc(100% + 22px) on its 18px sheet and calc(100% + 20px)
+     on its 16px sheet both place the sheet's LEFT edge at 100% + 4px;
+     translateX positions the left edge directly, so the rules below subtract
+     the sprite width from the copied margins (calc(100cqw + 22px - --fw)
+     etc.). The result is pixel-identical to aquarium: same speeds, same
+     positions, same off-screen gaps. 100cqw resolves against the overlay
+     (container-type: size — the cube precedent): a % translateX would
+     resolve against the fish's own box, never the row. The blue fish crosses
+     TWICE per loop: the 50% / 50.01% keyframe pair teleports it between two
+     fully-off-screen positions, giving two crossings on one element with no
+     visible snap. Both traversals are LINEAR because aquarium's are — an
+     eased crossing would drift out of step with it.
+   - Tail and fin motion is the continuous counterpart of aquarium's 2-frame
+     y-step toggle at the SAME cadence: rk-flair-aquarium-y runs a 0.8s
+     period on which the orange tail changes frame twice (2.5/sec) and the
+     blue tail four times (5/sec), so the orange wags at 0.4s alternate (one
+     full cycle per 0.8s) and the blue at 0.2s. Each fin flutters at its
+     fish's cadence on a staggered negative delay, so tail and fin never
+     read as one rigid rock (aquarium's fin is static — baked into its
+     sheet; the flutter is the requested HD addition). The tail's ±22° swing
+     about its body joint moves the fork tips ~3px peak-to-peak — the 3px
+     hop aquarium's second frame gives its tail. Both transform-origins are
+     DERIVED from --fw/--fh (px projections of the viewBox joint
+     coordinates), so resizing a sprite box cannot silently move the hinges
+     off the joints.
+   - The weed clump keeps its place (aquarium's constant 6px from the left
+     edge, bottom-anchored to the band floor: 50% + 11px − 15px height) and
+     its blades sway at aquarium's cadence — 0.4s alternate, the 2.5
+     frame-changes/sec of the 2-frame sheet — with the middle blade
+     counter-phased and all three on staggered negative delays, so the clump
+     never rotates as one rigid group. ±7° puts the tall blade's tip at
+     ~3.4px peak-to-peak — the up-to-3px hop aquarium's sway frame gives its
+     blades.
+   - ::before keeps aquarium's own bubble arrangement: a repeating 36×44
+     tile drifting UP exactly one tile per 5s loop, so the wrap is seamless.
+     The ONLY linear loops in the block are the two fish traversals and this
+     bubble tile — every articulation (tail, fin, blade) is eased, and no
+     step-end appears anywhere in it.
+   - All geometry is the established fixed 22px band with static centering,
+     so it holds in 18px picker cells, 22px rows, 36px coarse rows and full
+     SERVER tiles; the cqw traversals follow whatever width mounts it. */
+@keyframes rk-flair-nemo-sway {
+  from { transform: rotate(-7deg); }
+  to { transform: rotate(7deg); }
+}
+/* Counter-phase sway so adjacent blades never mirror each other. */
+@keyframes rk-flair-nemo-sway-alt {
+  from { transform: rotate(7deg); }
+  to { transform: rotate(-7deg); }
+}
+@keyframes rk-flair-nemo-bubbles {
+  from { background-position-y: 0; }
+  to { background-position-y: -44px; }
+}
+.rk-flair-nemo {
+  /* Query container for the fish traversals' 100cqw (the cube precedent) —
+     the overlay is absolute inset-0, so sizing off the row is unaffected. */
+  container-type: size;
+}
+.rk-flair-nemo::before {
+  /* Rising bubbles — aquarium's own ::before arrangement: a repeating 36×44
+     tile drifting UP exactly one tile per loop, so the wrap is seamless. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='44' viewBox='0 0 36 44'%3E%3Cg fill='white'%3E%3Ccircle cx='6' cy='32' r='1.5' fill-opacity='0.3'/%3E%3Ccircle cx='15' cy='20' r='1' fill-opacity='0.25'/%3E%3Ccircle cx='24' cy='28' r='2' fill-opacity='0.2'/%3E%3Ccircle cx='31' cy='10' r='1' fill-opacity='0.3'/%3E%3Ccircle cx='10' cy='6' r='1' fill-opacity='0.2'/%3E%3Ccircle cx='28' cy='38' r='1' fill-opacity='0.22'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 36px 44px;
+  background-repeat: repeat;
+  background-position: 0 0;
+  animation: rk-flair-nemo-bubbles 5s linear infinite;
+}
+.rk-flair-nemo .rk-nemo-weed {
+  /* Seaweed clump at aquarium's constant 6px from the left edge, bottom-
+     anchored to the 22px band floor (50% + 11px − 15px height) — a static
+     positioned shell; the sway lives on the individual blades. */
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 12px;
+  height: 15px;
+  margin-top: -4px;
+  z-index: 2;
+  pointer-events: none;
+}
+/* One tight box per blade, origin at the base (a rooted blade bends from
+   its base, never its middle), all three swaying at aquarium's cadence —
+   0.4s alternate, the 2.5 frame-changes/sec of the 2-frame sheet — with the
+   middle blade counter-phased and staggered negative delays, so the clump
+   never rotates as one rigid group. */
+.rk-flair-nemo .rk-nemo-blade {
+  position: absolute;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  transform-origin: bottom center;
+  animation: rk-flair-nemo-sway 0.4s ease-in-out infinite alternate;
+}
+.rk-flair-nemo .rk-nemo-blade:nth-child(1) {
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='14' viewBox='0 0 4 14'%3E%3Cpath d='M0.9 14 C0.3 11.5 1.5 9.5 0.8 7 C0.2 4.8 1.3 2.4 2.1 0.2 C3 2.2 2.1 4.6 2.7 7 C3.3 9.4 2.2 11.6 2.6 14 Z' fill='%233fae5c' fill-opacity='0.85'/%3E%3C/svg%3E");
+}
+.rk-flair-nemo .rk-nemo-blade:nth-child(2) {
+  left: 2px;
+  top: 5px;
+  width: 3px;
+  height: 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='10' viewBox='0 0 3 10.2'%3E%3Cpath d='M0.3 10.2 C0 8.2 1 6.6 0.5 4.8 C0.1 3.1 0.9 1.4 1.6 0 C2.2 1.5 1.6 3.2 2 4.9 C2.4 6.5 1.4 8.2 1.6 10.2 Z' fill='%232f8f4a' fill-opacity='0.7'/%3E%3C/svg%3E");
+  animation-name: rk-flair-nemo-sway-alt;
+  animation-delay: -0.13s;
+}
+.rk-flair-nemo .rk-nemo-blade:nth-child(3) {
+  left: 8px;
+  top: 6px;
+  width: 3px;
+  height: 9px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='3' height='9' viewBox='0 0 3 9'%3E%3Cpath d='M0.3 9 C0 7.2 0.9 5.8 0.5 4.2 C0.1 2.7 0.8 1.2 1.5 0 C2.1 1.4 1.5 2.9 1.9 4.4 C2.3 5.9 1.3 7.4 1.5 9 Z' fill='%2345c168' fill-opacity='0.7'/%3E%3C/svg%3E");
+  animation-delay: -0.27s;
+}
+/* The two fish — aquarium's cast, redrawn as HD bezier art. Each fish is a
+   box the exact width of aquarium's sprite sheet (orange 18px, blue 16px),
+   22px tall and centred on the band, split into three full-viewBox part
+   layers (tail, fin, body) so the tail and fin can move on their own hinges.
+   The orange faces right and crosses LEFT→RIGHT; the blue faces left and
+   crosses RIGHT→LEFT. */
+/* The traversals copy aquarium's rk-flair-aquarium-x keyframes exactly. A
+   percentage background-position resolves against (container − image), so
+   aquarium's calc(100% + 22px) on its 18px sheet places the sheet's LEFT
+   edge at 100% + 4px; translateX positions the left edge directly, so the
+   copied 22px/20px margins are reduced by the sprite width --fw. The orange
+   crosses ONCE per 22s loop, from -18px (its own width off the left edge)
+   to 100cqw + 4px; the blue crosses TWICE per loop, from 100cqw + 4px to
+   -16px, its 50% / 50.01% pair teleporting it between the two
+   fully-off-screen ends — two crossings on one element with no visible
+   snap. Both run LINEAR because aquarium's do; 100cqw resolves against the
+   overlay (container-type: size) — a % translateX would resolve against the
+   fish's own box, never the row. */
+@keyframes rk-flair-nemo-swim-orange {
+  from { transform: translateX(calc(-1 * var(--fw))); }
+  to { transform: translateX(calc(100cqw + 22px - var(--fw))); }
+}
+@keyframes rk-flair-nemo-swim-blue {
+  0% { transform: translateX(calc(100cqw + 20px - var(--fw))); }
+  50% { transform: translateX(calc(-1 * var(--fw))); }
+  50.01% { transform: translateX(calc(100cqw + 20px - var(--fw))); }
+  100% { transform: translateX(calc(-1 * var(--fw))); }
+}
+/* Tail wag: the continuous counterpart of aquarium's 2-frame step-end tail
+   toggle at the SAME cadence — rk-flair-aquarium-y runs a 0.8s period on
+   which the orange tail changes frame twice (2.5/sec), so the orange wags
+   at 0.4s alternate (one full cycle per 0.8s); the blue tail changes four
+   times per period (5/sec), so it wags at 0.2s. ±22° about the body joint
+   moves the fork tips ~3px peak-to-peak — the 3px hop aquarium's second
+   frame gives its tail. */
+@keyframes rk-flair-nemo-tail {
+  from { transform: rotate(-22deg); }
+  to { transform: rotate(22deg); }
+}
+/* Pectoral fin flutter: aquarium's fin is static (baked into its sheet), so
+   this is the requested HD addition — run at each fish's own tail cadence,
+   a quarter cycle behind its tail (the negative delays below). */
+@keyframes rk-flair-nemo-fin {
+  from { transform: rotate(-18deg); }
+  to { transform: rotate(18deg); }
+}
+.rk-flair-nemo .rk-nemo-fish {
+  /* --fw/--fh are the single source of truth for the sprite box: the swim
+     margins and both part hinge points are DERIVED from them below, because
+     they are px projections of viewBox coordinates — resizing the box
+     without recomputing them silently moves the hinges off the joints. */
+  --fh: 22px;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: var(--fh);
+  margin-top: calc(var(--fh) / -2);
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.92;
+}
+.rk-flair-nemo .rk-nemo-orange {
+  --fw: 18px;
+  width: var(--fw);
+  animation: rk-flair-nemo-swim-orange 22s linear infinite;
+}
+.rk-flair-nemo .rk-nemo-blue {
+  --fw: 16px;
+  width: var(--fw);
+  animation: rk-flair-nemo-swim-blue 22s linear infinite;
+}
+/* Each part fills the fish box (inset: 0) and carries a full-viewBox SVG of
+   ONLY its own art, so transform-origin pins in px to the part's physical
+   JOINT — the tail hinges where it meets the body, the fin pivots at its
+   root (a part rotating about the sprite's centre reads as the whole fish
+   rocking). The origins are DERIVED from --fw/--fh (the projections noted
+   per rule) rather than written as literal px, so resizing a sprite box
+   cannot silently move the hinges off the joints. The body never moves, so
+   it needs no origin. */
+.rk-flair-nemo .rk-nemo-tail,
+.rk-flair-nemo .rk-nemo-fin,
+.rk-flair-nemo .rk-nemo-body {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.rk-flair-nemo .rk-nemo-tail {
+  animation: rk-flair-nemo-tail 0.4s ease-in-out infinite alternate;
+}
+.rk-flair-nemo .rk-nemo-orange .rk-nemo-tail {
+  /* body joint at viewBox (4.8, 10.5) of 18x22 */
+  transform-origin: calc(var(--fw) * 4.8 / 18) calc(var(--fh) * 10.5 / 22);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cpath d='M4.8 10.5 C3.5 9.5 2.1 8.3 0.7 7.2 C1.3 8.9 1.8 9.9 2.4 10.5 C1.8 11.1 1.3 12.1 0.7 13.8 C2.1 12.7 3.5 11.5 4.8 10.5 Z' fill='%23f4701f' stroke='%232a1608' stroke-width='0.22'/%3E%3C/svg%3E");
+}
+.rk-flair-nemo .rk-nemo-blue .rk-nemo-tail {
+  /* body joint at viewBox (11.2, 10.5) of 16x22 */
+  transform-origin: calc(var(--fw) * 11.2 / 16) calc(var(--fh) * 10.5 / 22);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cpath d='M11.2 10.5 C12.5 9.5 13.9 8.3 15.3 7.2 C14.7 8.9 14.2 9.9 13.6 10.5 C14.2 11.1 14.7 12.1 15.3 13.8 C13.9 12.7 12.5 11.5 11.2 10.5 Z' fill='%23ffd23f' stroke='%2312121a' stroke-width='0.22'/%3E%3C/svg%3E");
+  animation-duration: 0.2s;
+  animation-delay: -0.13s;
+}
+.rk-flair-nemo .rk-nemo-fin {
+  animation: rk-flair-nemo-fin 0.4s ease-in-out infinite alternate;
+  animation-delay: -0.1s;
+}
+.rk-flair-nemo .rk-nemo-orange .rk-nemo-fin {
+  /* fin root at viewBox (8.2, 12.6) of 18x22 */
+  transform-origin: calc(var(--fw) * 8.2 / 18) calc(var(--fh) * 12.6 / 22);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cpath d='M8.2 12.4 C9.5 12.5 10.7 13.2 11.3 14.5 C10.0 14.4 8.8 13.7 8.2 12.9 Z' fill='%23f4701f' stroke='%232a1608' stroke-width='0.2'/%3E%3C/svg%3E");
+}
+.rk-flair-nemo .rk-nemo-blue .rk-nemo-fin {
+  /* fin root at viewBox (7.8, 12.6) of 16x22 */
+  transform-origin: calc(var(--fw) * 7.8 / 16) calc(var(--fh) * 12.6 / 22);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cpath d='M7.8 12.4 C6.5 12.5 5.3 13.2 4.7 14.5 C6.0 14.4 7.2 13.7 7.8 12.9 Z' fill='%232f86dd' stroke='%2312121a' stroke-width='0.2'/%3E%3C/svg%3E");
+  animation-duration: 0.2s;
+  animation-delay: -0.05s;
+}
+.rk-flair-nemo .rk-nemo-orange .rk-nemo-body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='22' viewBox='0 0 18 22'%3E%3Cdefs%3E%3ClinearGradient id='ob' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ff9e4a'/%3E%3Cstop offset='0.45' stop-color='%23f4701f'/%3E%3Cstop offset='1' stop-color='%23c4500f'/%3E%3C/linearGradient%3E%3CradialGradient id='os' cx='0.42' cy='0.28' r='0.5'%3E%3Cstop offset='0' stop-color='%23fff' stop-opacity='0.4'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3CclipPath id='obody'%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z'/%3E%3C/clipPath%3E%3C/defs%3E%3Cpath d='M8.6 7.5 C9.4 6.3 10.6 5.6 11.8 5.6 C11.2 6.4 10.6 7.0 10.0 7.4 Z' fill='%23f4701f' stroke='%232a1608' stroke-width='0.2'/%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='url(%23ob)'/%3E%3Cg clip-path='url(%23obody)'%3E%3Cpath d='M12.9 6.6 L11.6 6.6 L11.0 14.4 L12.4 14.4 Z' fill='%23fdfdfb' stroke='%23241108' stroke-width='0.2'/%3E%3Cpath d='M9.9 6.6 L8.3 6.6 L7.5 14.4 L9.1 14.4 L10.6 10.5 Z' fill='%23fdfdfb' stroke='%23241108' stroke-width='0.2'/%3E%3Cpath d='M5.9 6.6 L4.9 6.6 L4.4 14.4 L5.4 14.4 Z' fill='%23fdfdfb' stroke='%23241108' stroke-width='0.2'/%3E%3C/g%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='url(%23os)'/%3E%3Cpath d='M15.2 10.5 C15.2 8.4 12.5 7.1 9.2 7.1 C6.0 7.1 4.4 8.8 4.4 10.5 C4.4 12.2 6.0 13.9 9.2 13.9 C12.5 13.9 15.2 12.6 15.2 10.5 Z' fill='none' stroke='%232a1608' stroke-width='0.24'/%3E%3Ccircle cx='13.6' cy='9.7' r='0.85' fill='%231a0e06'/%3E%3Ccircle cx='13.85' cy='9.45' r='0.3' fill='%23fff' fill-opacity='0.92'/%3E%3C/svg%3E");
+}
+.rk-flair-nemo .rk-nemo-blue .rk-nemo-body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='22' viewBox='0 0 16 22'%3E%3Cdefs%3E%3ClinearGradient id='bb' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%234aa3f0'/%3E%3Cstop offset='0.45' stop-color='%231f6fd0'/%3E%3Cstop offset='1' stop-color='%230f3f8c'/%3E%3C/linearGradient%3E%3CradialGradient id='bs' cx='0.58' cy='0.28' r='0.5'%3E%3Cstop offset='0' stop-color='%23fff' stop-opacity='0.4'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='0'/%3E%3C/radialGradient%3E%3CclipPath id='bbody'%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z'/%3E%3C/clipPath%3E%3C/defs%3E%3Cpath d='M7.4 7.5 C6.6 6.3 5.4 5.6 4.2 5.6 C4.8 6.4 5.4 7.0 6.0 7.4 Z' fill='%232f86dd' stroke='%2312121a' stroke-width='0.2'/%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='url(%23bb)'/%3E%3Cg clip-path='url(%23bbody)'%3E%3Cpath d='M3.0 10.4 C4.8 8.6 7.6 7.8 10.3 8.1 C11.3 9.2 11.5 10.9 11.0 12.7 L9.7 12.2 C10.1 10.8 9.9 9.8 9.3 9.4 C7.2 9.2 5.2 9.9 4.0 11.2 Z' fill='%23101a28' fill-opacity='0.95'/%3E%3C/g%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='url(%23bs)'/%3E%3Cpath d='M0.8 10.5 C0.8 8.4 3.5 7.1 6.8 7.1 C10.0 7.1 11.6 8.8 11.6 10.5 C11.6 12.2 10.0 13.9 6.8 13.9 C3.5 13.9 0.8 12.6 0.8 10.5 Z' fill='none' stroke='%2312121a' stroke-width='0.24'/%3E%3Ccircle cx='2.5' cy='9.7' r='0.85' fill='%230a0a12'/%3E%3Ccircle cx='2.25' cy='9.45' r='0.3' fill='%23fff' fill-opacity='0.92'/%3E%3C/svg%3E");
 }
 
 /* warp (3D): a hyperspace starfield, ambient in any mount box. Markup
@@ -1677,10 +1964,10 @@ html[data-theme="light"] {
      nothing to zero here; listed so the reduced-motion audit stays complete. */
   /* Watched underbar (.rk-watched-underbar): static by design — no animation,
      nothing to zero; listed for audit completeness like .rk-hazard. */
-  /* Flair overlays (all fourteen named states): motion-only ambient decoration
+  /* Flair overlays (all sixteen named states): motion-only ambient decoration
      with NO static label cue of their own — hidden entirely, including the
      onepiece wave baseline (a bare wave line without its ship would read as
-     residue) and the cube/warp child spans (transform-driven treatments). */
+     residue) and the cube/warp/nemo child spans (transform-driven treatments). */
   .rk-flair-rain::before,
   .rk-flair-scan::before,
   .rk-flair-scan::after,
@@ -1694,6 +1981,15 @@ html[data-theme="light"] {
   .rk-flair-matrix::before,
   .rk-flair-aquarium::before,
   .rk-flair-aquarium::after,
+  .rk-flair-nemo::before,
+  .rk-flair-nemo .rk-nemo-fish,
+  .rk-flair-nemo .rk-nemo-orange,
+  .rk-flair-nemo .rk-nemo-blue,
+  .rk-flair-nemo .rk-nemo-tail,
+  .rk-flair-nemo .rk-nemo-fin,
+  .rk-flair-nemo .rk-nemo-body,
+  .rk-flair-nemo .rk-nemo-weed,
+  .rk-flair-nemo .rk-nemo-blade,
   .rk-flair-roadrunner::before,
   .rk-flair-roadrunner::after,
   .rk-flair-invaders::after,

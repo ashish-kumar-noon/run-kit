@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 // The single mount for row flair overlays (R9): the overlay span carries
-// `rk-flair-{value}`; only the transform-driven treatments (cube/warp) get
+// `rk-flair-{value}`; only the transform-driven treatments (cube/warp/nemo) get
 // CHILD markup, and the drag-source guard hides the whole overlay for every
 // flair (transforms on child spans would corrupt the drag ghost).
 describe("FlairOverlay", () => {
@@ -34,6 +34,38 @@ describe("FlairOverlay", () => {
     expect(container.querySelectorAll(".rk-flair-warp .rk-warp-plane")).toHaveLength(3);
   });
 
+  it("renders the nemo markup contract: 2 fish (orange + blue, each tail + fin + body) + 1 weed of 3 blades", () => {
+    const { container } = render(<FlairOverlay flair="nemo" />);
+    const overlay = container.querySelector(".rk-flair-nemo");
+    expect(overlay).not.toBeNull();
+    // Aquarium's own cast: the overlay's only children are the two fish and
+    // the weed clump (bubbles ride the overlay's ::before).
+    expect(Array.from(overlay!.children).map((el) => el.className)).toEqual([
+      "rk-nemo-fish rk-nemo-orange",
+      "rk-nemo-fish rk-nemo-blue",
+      "rk-nemo-weed",
+    ]);
+    // Each fish splits into tail + fin + body in paint order (tail and fin
+    // behind, body on top covering their roots) so the parts can articulate
+    // on their own hinges.
+    for (const fish of ["rk-nemo-orange", "rk-nemo-blue"]) {
+      const parts = Array.from(overlay!.querySelector(`.${fish}`)!.children).map(
+        (el) => el.className,
+      );
+      expect(parts).toEqual(["rk-nemo-tail", "rk-nemo-fin", "rk-nemo-body"]);
+    }
+    const weed = overlay!.querySelectorAll(":scope > .rk-nemo-weed");
+    expect(weed).toHaveLength(1);
+    expect(weed[0].querySelectorAll(":scope > .rk-nemo-blade")).toHaveLength(3);
+    // The manta and the enriched scene were both rejected: no manta
+    // wrappers, no layers, shafts or floor may exist.
+    expect(
+      overlay!.querySelectorAll(
+        "[class*='rk-nemo-manta'], .rk-nemo-layer, .rk-nemo-shafts, .rk-nemo-floor",
+      ),
+    ).toHaveLength(0);
+  });
+
   it("renders nothing without a flair value", () => {
     const { container } = render(<FlairOverlay flair={undefined} />);
     expect(container.querySelector("[class*='rk-flair-']")).toBeNull();
@@ -42,7 +74,7 @@ describe("FlairOverlay", () => {
   });
 
   it("hidden (drag source) suppresses the overlay for every flair", () => {
-    for (const flair of ["nyan", "cube", "warp"]) {
+    for (const flair of ["nyan", "cube", "warp", "nemo"]) {
       const { container } = render(<FlairOverlay flair={flair} hidden />);
       expect(container.querySelector("[class*='rk-flair-']")).toBeNull();
     }

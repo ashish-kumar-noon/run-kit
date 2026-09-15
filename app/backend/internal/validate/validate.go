@@ -209,7 +209,7 @@ var (
 		"blocked", "blocked:1", "blocked:2", "blocked:3",
 	}
 	roleTokens  = []string{"operator"}
-	flairTokens = []string{"rain", "scan", "nyan", "naruto", "onepiece", "pacman", "matrix", "aquarium", "roadrunner", "invaders", "cube", "warp", "spidey", "ironman", "noon"}
+	flairTokens = []string{"rain", "scan", "nyan", "naruto", "onepiece", "pacman", "matrix", "aquarium", "nemo", "roadrunner", "invaders", "cube", "warp", "spidey", "ironman", "noon"}
 	ownerTokens = []string{"operator"}
 )
 
@@ -274,7 +274,7 @@ func ValidateRoleValue(value string) string {
 var FlairValues = closedSet(flairTokens)
 
 // ValidateFlairValue validates an @rk_win_flair value against flairTokens (one of
-// ""/rain/scan/nyan/naruto/onepiece/pacman/matrix/aquarium/roadrunner/
+// ""/rain/scan/nyan/naruto/onepiece/pacman/matrix/aquarium/nemo/roadrunner/
 // invaders/cube/warp/spidey/ironman/noon). Returns an empty string if valid, an
 // error message otherwise. The single shared flair-value rule reused by the
 // window-option and session-flair handlers.
