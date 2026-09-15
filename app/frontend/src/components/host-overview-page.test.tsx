@@ -495,6 +495,19 @@ describe("HostOverviewPage — TopBar mount moved to root (260707-4vq2)", () => 
   });
 });
 
+describe("HostOverviewPage — page root ground", () => {
+  it("paints the page root on the chrome ground shared with every Shell route", () => {
+    const { container } = renderPage();
+    // The host page sits on the same flush stage ground as every other route
+    // (the chrome itself, under the chrome top bar); the retired inset token
+    // must not return.
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain("bg-bg-chrome");
+    expect(root.className).not.toContain("bg-bg-chrome-raised");
+    expect(root.className).not.toContain("bg-bg-inset");
+  });
+});
+
 describe("HostOverviewPage — BOARDS zone", () => {
   it("renders board tiles above TMUX SERVERS and navigates on click", () => {
     mockBoards = [
