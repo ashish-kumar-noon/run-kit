@@ -30,8 +30,8 @@
   --color-bg-primary: #0f1117;
   --color-bg-card: #171b24;
   --color-bg-inset: #0a0c12;
-  --color-bg-chrome: #1e1f21;
-  --color-bg-chrome-raised: #262729;
+  --color-bg-chrome: #1a1b1f;
+  --color-bg-chrome-raised: #222327;
   --color-text-primary: #e8eaf0;
   --color-text-secondary: #7a8394;
   --color-border: #454d66;
@@ -55,8 +55,8 @@ html[data-theme="dark"] {
   --color-bg-primary: #0f1117;
   --color-bg-card: #171b24;
   --color-bg-inset: #0a0c12;
-  --color-bg-chrome: #1e1f21;
-  --color-bg-chrome-raised: #262729;
+  --color-bg-chrome: #1a1b1f;
+  --color-bg-chrome-raised: #222327;
   --color-text-primary: #e8eaf0;
   --color-text-secondary: #7a8394;
   --color-border: #454d66;
@@ -75,8 +75,8 @@ html[data-theme="light"] {
   --color-bg-primary: #f8f9fb;
   --color-bg-card: #ffffff;
   --color-bg-inset: #e8eaef;
-  --color-bg-chrome: #e5e5e6;
-  --color-bg-chrome-raised: #d9dada;
+  --color-bg-chrome: #e9eaeb;
+  --color-bg-chrome-raised: #dedee0;
   --color-text-primary: #1a1d24;
   --color-text-secondary: #6b7280;
   --color-border: #d1d5db;
@@ -173,18 +173,57 @@ summary {
   -webkit-app-region: no-drag;
 }
 
-/* Scrollbar styling */
+/* ── Scrollbars: reserved gutter, bar only while the pointer (or focus) is in ──
+   Classic 6px bars everywhere (the fixed width opts out of platform overlay
+   bars). The track is transparent so the gutter takes the surface it sits on
+   (chrome, tile, popup) instead of painting a page-colored stripe down a
+   chrome panel; the thumb is the border color.
+   VERTICAL scrollers (Tailwind's `overflow-y-auto` / `overflow-auto`) reveal
+   their bar by toggling overflow, not by tinting the thumb: at rest they are
+   `overflow-y: hidden` with `scrollbar-gutter: stable`, so the 6px gutter is
+   reserved and nothing shifts; while the pointer is inside the scroller (hover
+   reaches it from any descendant) or focus is within it (keyboard users) the
+   overflow returns to `auto` and the bar exists. Creating and destroying the
+   bar is a real style change on the element, so every engine repaints it —
+   a thumb-color rule on the scrollbar pseudo-element can be left stale when
+   the pointer exits through a portal (the row flyout card). Wheel scrolling
+   needs the pointer inside, so it always finds `auto`; programmatic scrolling
+   (`scrollIntoView`) works on `hidden` too. Coarse pointers have no hover and
+   keep `auto`. HORIZONTAL bands have no reservable gutter (`scrollbar-gutter`
+   is inline-end only), so `.rk-band-scroll` keeps a thumb-tint reveal below.
+   Firefox styles bars through the standard properties, and in Chromium those
+   properties disable the -webkit- pseudo styling on the same element, so the
+   standard rules are scoped to engines without the pseudo. */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-primary);
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 3px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+}
+.overflow-y-auto,
+.overflow-auto {
+  scrollbar-gutter: stable;
+}
+.overflow-y-auto:not(:hover):not(:focus-within),
+.overflow-auto:not(:hover):not(:focus-within) {
+  overflow-y: hidden;
+}
+@media (any-pointer: coarse) {
+  .overflow-y-auto:not(:hover):not(:focus-within),
+  .overflow-auto:not(:hover):not(:focus-within) {
+    overflow-y: auto;
+  }
 }
 
 @keyframes logo-chase {
@@ -1915,11 +1954,13 @@ html[data-theme="light"] {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: transparent transparent;
   padding-bottom: 5px;
 }
 .rk-band-scroll::-webkit-scrollbar { height: 6px; }
-.rk-band-scroll::-webkit-scrollbar-thumb { background: var(--color-border); }
+.rk-band-scroll:hover { scrollbar-color: var(--color-border) transparent; }
+.rk-band-scroll::-webkit-scrollbar-thumb { background: transparent; }
+.rk-band-scroll:hover::-webkit-scrollbar-thumb { background: var(--color-border); }
 .rk-band-fade { position: relative; }
 .rk-band-fade::after {
   content: "";

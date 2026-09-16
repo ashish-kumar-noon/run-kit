@@ -5,6 +5,12 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useKeybindings } from "@/hooks/use-keybindings";
 import { matchesCombo, shouldSuppressChord } from "@/lib/keybindings";
 import { focusSidebarCurrentRow, restoreWindowFocus } from "@/lib/sidebar-events";
+import { STAGE_PADDING_PX, STAGE_COLUMN_GAP_PX } from "@/lib/stage-geometry";
+
+// Re-exported so the top bar's sidebar head (and its tests) can overlay
+// exactly the stage region without duplicating the numbers; the definitions
+// live in the DOM-free lib module so e2e specs can import them too.
+export { STAGE_PADDING_PX, STAGE_COLUMN_GAP_PX };
 
 /**
  * `Cmd+B` (macOS) / `Shift+Ctrl+B` (Linux/Windows) — the stateful sidebar
@@ -263,8 +269,8 @@ export function Shell({
     gridTemplateColumns: sidebarVisible ? `${sidebarWidth}px 1fr` : "0 1fr",
     gridTemplateRows: "1fr auto",
     gridTemplateAreas: '"sidebar content" "sidebar bottombar"',
-    columnGap: sidebarVisible ? "6px" : "0",
-    padding: "6px",
+    columnGap: sidebarVisible ? `${STAGE_COLUMN_GAP_PX}px` : "0",
+    padding: `${STAGE_PADDING_PX}px`,
     minWidth: 0,
     minHeight: 0,
     transition: "grid-template-columns 150ms ease-out, column-gap 150ms ease-out",

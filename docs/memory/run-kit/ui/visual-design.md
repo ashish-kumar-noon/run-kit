@@ -10,6 +10,10 @@ Three theme modes: **system** (follows OS), **light**, **dark**. Default: system
 
 Theme is applied via `data-theme` attribute on `<html>` (`"dark"` or `"light"`). CSS custom properties in `globals.css` switch values per `html[data-theme="dark"]` and `html[data-theme="light"]` selectors. The `@theme` block registers token names for Tailwind CSS 4 with dark palette as initial values.
 
+### Scrollbars
+
+Classic 6px bars everywhere (`::-webkit-scrollbar` width/height in `globals.css`); the track is transparent (the gutter takes the surface it sits on — chrome, tile, popup); the thumb is `--color-border`. **Vertical scrollers reveal their bar by toggling overflow, not by tinting the thumb**: every Tailwind `overflow-y-auto` / `overflow-auto` container is `overflow-y: hidden` with `scrollbar-gutter: stable` at rest (the 6px gutter stays reserved, nothing shifts) and returns to `auto` while the pointer is inside it (`:hover` — reached from any descendant, so pointing at a sidebar row reveals the sessions list's bar) or focus is within it (`:focus-within` — the keyboard path). Creating/destroying the bar is a real style change on the element, so every engine repaints it; a thumb-color rule on the scrollbar pseudo-element could be left stale when the pointer exits through a portal such as the row flyout card. Wheel scrolling always finds `auto` (the pointer is inside); `scrollIntoView` works on `hidden`. Coarse pointers keep `auto`. Horizontal bands have no reservable gutter (`scrollbar-gutter` is inline-end only), so `.rk-band-scroll` keeps a thumb-tint rest/hover split. The xterm viewport is xterm-managed (`overflow-y: scroll` from xterm.css, not the utility class) and keeps its bar visible — it carries scrollback position. Engines without the `-webkit-` pseudo (Firefox) style through `scrollbar-width: thin` + `scrollbar-color`, scoped with `@supports not selector(::-webkit-scrollbar)` because in Chromium the standard properties disable the pseudo styling on the same element. Overflow is also signalled independently where it matters (the sidebar scroll-edge fade).
+
 ### Border-Width System
 
 A three-tier border-width vocabulary, all in `--color-border`: (260702-6m46)
@@ -25,10 +29,10 @@ A three-tier border-width vocabulary, all in `--color-border`: (260702-6m46)
 | `--color-bg-primary` | `#0f1117` | `#f8f9fb` | Page background |
 | `--color-bg-card` | `#171b24` | `#ffffff` | Card backgrounds |
 | `--color-bg-inset` | `#0a0c12` | `#e8eaef` | Recessed wells and popup furniture: the coarse status rail, PANE wells, the switch-off track, tile text previews, popup title bars and action trays |
-| `--color-bg-chrome` | `#1e1f21` | `#e5e5e6` | Chrome material: the Shell stage ground + host page root, the flat sidebar column, mobile drawer, top bar (wash wrapper), status bar, lit sash grip dots; the theme-color / instance-accent blend base |
-| `--color-bg-chrome-raised` | `#262729` | `#d9dada` | One lightness step past the chrome: the uncolored row hover / held-open fill on the sidebar — the only thing on the chrome that rises above it |
+| `--color-bg-chrome` | `#1a1b1f` | `#e9eaeb` | Chrome material: the Shell stage ground + host page root, the flat sidebar column, mobile drawer, top bar (wash wrapper), status bar, lit sash grip dots; the theme-color / instance-accent blend base |
+| `--color-bg-chrome-raised` | `#222327` | `#dedee0` | One lightness step past the chrome: the uncolored row hover / held-open fill on the sidebar — the only thing on the chrome that rises above it |
 | `--color-text-primary` | `#e8eaf0` | `#1a1d24` | Primary text |
-| `--color-text-secondary` | `#7a8394` | `#6b7280` | Secondary text, labels |
+| `--color-text-secondary` | `#7a8394` | `#6b7280` | Secondary text, labels — derived as `blend(fg, ansi[8], 0.3)` then lifted (dark) / deepened (light) in OKLab L until it clears 4.5:1 against `--color-bg-chrome`; the static values are the default palettes' bright black |
 | `--color-border` | `#454d66` | `#d1d5db` | Borders, dividers |
 | `--color-accent` | `#5b8af0` | `#4a7ae8` | Non-control uses only: links, hover reveals, status/data-viz hues, the per-instance accent system — no control carries it (state is green, input focus borders are green, hovers are neutral) |
 | `--color-accent-green` | `#22c55e` | `#16a34a` | State only — activity indicators, latched/armed controls, checked/selected menu rows and settings pickers, the global focus ring, the live-input focus border |
@@ -46,7 +50,7 @@ A blocking inline `<script>` in `index.html` `<head>` reads `localStorage("runki
 ### PWA Meta Tags & Theme Color
 
 `app/frontend/index.html` includes PWA-related tags in `<head>`:
-- `<meta name="theme-color" content="#1e1f21" />` — initial value matching the default-dark chrome hex
+- `<meta name="theme-color" content="#1a1b1f" />` — initial value matching the default-dark chrome hex
 - `<meta name="apple-mobile-web-app-capable" content="yes" />` — enables standalone mode on iOS
 - `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />` — content renders behind the status bar
 - `<link rel="apple-touch-icon" href="/generated-icons/icon-192.png" />` — homescreen icon for iOS
@@ -588,20 +592,38 @@ breaks the "stage 3 fills the well" reading; and shrinking the coarse row to ~26
 *Introduced by*: 260819-lrm8-universal-flair-catalogue-refresh
 
 ### Two-family chrome vocabulary
-**Decision**: Every chrome surface is either **attached frame** (top bar + status bar ONLY — flush, square, full-width, never rounded, never inset by stage padding; the status bar is a direct outer-grid child so the stage's 6px padding never reaches it) or a **floating card** (tiles, board panes, the server route's 900px `fixedWidth` column — `rounded-md`, the 55% dimmed `rk-card-border`, floating with 6px gaps on the shared stage ground). The attached frame, the stage ground AND the sidebar share one palette-derived **chrome material** (`bg-bg-chrome`): the stage ground IS the chrome (the flush stage) and the sidebar is a flat column of it — no card border, no radius — so sidebar, ground, top bar and status bar read as one gray window chrome around palette-colored content tiles (`bg-bg-primary`). All four routes share that ground: Shell routes (terminal, `/$server`, `/board/$name`) get it from Shell's universal stage; the host page `/` mounts no Shell and sets `bg-bg-chrome-raised` on its own root (`host-overview-page.tsx:304`). The sidebar card floats 6px above the status bar; its drag-resize handle carries the `.rk-divider` gap-seam chrome straddling the 6px gap rather than a seam bar.
+**Decision**: Every chrome surface is either **attached frame** (top bar + status bar ONLY — flush, square, full-width, never rounded, never inset by stage padding; the status bar is a direct outer-grid child so the stage's 6px padding never reaches it) or a **floating card** (tiles, board panes, the server route's 900px `fixedWidth` column — `rounded-md`, the 55% dimmed `rk-card-border`, floating with 6px gaps on the shared stage ground). The attached frame, the stage ground AND the sidebar share one palette-derived **chrome material** (`bg-bg-chrome`): the stage ground IS the chrome (the flush stage) and the sidebar is a flat column of it — no card border, no radius — so sidebar, ground, top bar and status bar read as one gray window chrome around palette-colored content tiles (`bg-bg-primary`). All four routes share that ground: Shell routes (terminal, `/$server`, `/board/$name`) get it from Shell's universal stage; the host page `/` mounts no Shell and sets `bg-bg-chrome-raised` on its own root (`host-overview-page.tsx:304`). The sidebar sits flush in the stage, ending 6px above the status bar (the stage's bottom padding); its drag-resize handle carries the `.rk-divider` gap-seam chrome straddling the 6px gap rather than a seam bar. The top band's left segment belongs to the sidebar column: while the sidebar is open on desktop, the bar's `SidebarHead` paints the brand and the sidebar toggle over the bar's left end (width `sidebarWidth + STAGE_PADDING_PX + STAGE_COLUMN_GAP_PX`, the stage constants), and the bar's 3px bottom seam stays ONE continuous line on the single full-width header — the head carries no border ([ui/top-bar](/run-kit/ui/top-bar.md) § Sidebar head).
 **Why**: One organizing rule keeps every seam decidable; a half-card sidebar corner, a stage-scoped status bar, or per-route grounds each break it. One continuous ground gives all four routes the same visual floor; making the sidebar a flat column of that ground (rather than a card on it) is the macOS full-bleed sidebar reading — a border around a gray card inside a gray frame added a seam with no meaning. Sharing the frame's material is the macOS window-chrome reading (sidebar + toolbar on one gray, content well keeping its own color); an sRGB lighten/darken step cannot serve as that material because it is a different visible size on dark vs light palettes, so the material is an OKLab lightness step (§ Design Decisions → OKLCH ΔL derivation with partial chroma).
 **Rejected**: An attached square sidebar with a `border-r` seam welded to the status bar (the sidebar sits on no ground, and the junction reads as a square T); a sidebar bottom gap + rounded bottom-right corner on an attached sidebar (a half-card); the status bar starting right of the sidebar (a stage-scoped strip carrying host-global segments, and two competing bottom edges); scrollable status-bar overflow (a scrolling bar hides what it exists to show — overflow degrades by ladder instead); the sidebar on `bg-bg-primary` like the content tiles (the panel blurs into the terminal field — on dark themes the gap ground measured ΔL 0.005–0.011, perceptually nothing); a carded chrome sidebar on a `bg-bg-chrome-raised` ground (the gap-seam variant — previewed live and dropped: the card border inside the same-material frame read as clutter).
-*Introduced by*: 260815-19me-composed-frame-unification
+*Introduced by*: 260815-19me-composed-frame-unification; the sidebar head 260915-lm5q-full-height-sidebar-head
 
-### Chrome material over lifted card / recessed / full-height
-**Decision**: The attached frame (top bar + status bar) and the sidebar share one derived gray material (`bg-bg-chrome`); content tiles keep `palette.background`.
-**Why**: It is the macOS reading the design asked for and maps 1:1 onto the two-family chrome vocabulary; a gray card inside a palette-colored frame is the least coherent state, and recessed clamps at black on #000-background themes.
-**Rejected**: Lifted card as a shipped intermediate (no new information over a devtools check); recessed (clamp, no room on ayu-dark); full-height sidebar (a layout change, not a color change).
-*Introduced by*: 260915-zeid-chrome-material-surface
+### Chrome material over lifted card / recessed
+**Decision**: The attached frame (top bar + status bar) and the sidebar share one derived gray material (`bg-bg-chrome`); content tiles keep `palette.background`. The full-height sidebar variant is built as a layout change on top of this shared material — the sidebar column's head paints over the top bar's left end ([ui/top-bar](/run-kit/ui/top-bar.md) § Sidebar head).
+**Why**: It is the macOS reading the design asked for and maps 1:1 onto the two-family chrome vocabulary; a gray card inside a palette-colored frame is the least coherent state, and recessed clamps at black on #000-background themes. With the material shared, the full-height layout is a painted head, visually identical to a real root-grid column.
+**Rejected**: Lifted card as a shipped intermediate (no new information over a devtools check); recessed (clamp, no room on ayu-dark).
+*Introduced by*: 260915-zeid-chrome-material-surface; full-height built 260915-lm5q-full-height-sidebar-head
+
+### Continuous seam on a single element
+**Decision**: The header keeps `border-b-[3px] border-border` full-width; the sidebar head carries no border.
+**Why**: The seam must read continuous from the left edge to the right edge across head and bar; one element cannot be split.
+**Rejected**: A head with its own bottom border (a seam between two borders); a border on the sidebar aside (starts 6px lower, breaking the line).
+*Introduced by*: 260915-lm5q-full-height-sidebar-head
+
+### Brand row is mobile-only
+**Decision**: `SidebarBrand` renders only on mobile; the desktop brand lives in the top bar's sidebar head.
+**Why**: Two brands stacked ~50px apart on desktop would be redundant; on phones the drawer's brand row is the only brand surface.
+**Rejected**: Keeping the in-aside brand row on desktop under the head.
+*Introduced by*: 260915-lm5q-full-height-sidebar-head
+
+### Toggle relocation without focus management
+**Decision**: Toggling from the sidebar head unmounts it and mounts the cluster hamburger; no focus is moved.
+**Why**: Keyboard reachability is carried by the `sidebar-toggle` palette entry and the sidebar chords; focus relocation after a toggle-initiated move is a deferred follow-up.
+**Rejected**: Focusing the relocated toggle after a toggle-initiated relocation (deferred to a follow-up).
+*Introduced by*: 260915-lm5q-full-height-sidebar-head
 
 ### OKLCH ΔL derivation with partial chroma
-**Decision**: The chrome tokens are `oklch(L ± 0.06, C × 0.35, h)` of the background, gamut-reduced by chroma; the raised token is a further 0.035 step in the same direction.
-**Why**: `bgCard`/`bgInset` are sRGB percentage steps that are visible on one theme category and invisible on the other (dark: card ΔL 0.06–0.08, inset 0.005–0.011; light: card 0.02, inset 0.045). An OKLab step is the same visible step on every palette; keeping 35% chroma stops the gray fighting tinted terminals (solarized, ubuntu) without inheriting the full tint.
+**Decision**: The chrome tokens are `oklch(L ± 0.045, C × 0.6, h)` of the background, gamut-reduced by chroma; the raised token is a further 0.035 step in the same direction; on dark palettes the chrome L floors at 0.16 (`CHROME_MIN_L`) because OKLab compresses near black and a 0.045 step from #000000 encodes back to #000000. Secondary text is floored at 4.5:1 against the chrome (OKLab L nudge, hue and chroma preserved).
+**Why**: `bgCard`/`bgInset` are sRGB percentage steps that are visible on one theme category and invisible on the other (dark: card ΔL 0.06–0.08, inset 0.005–0.011; light: card 0.02, inset 0.045). An OKLab step is the same visible step on every palette; keeping 60% chroma lets tinted palettes (Solarized's teal, Ubuntu's aubergine) keep their cast instead of going neutral, while the gray still reads as gray. The step is 0.045 rather than 0.06 because on mid-dark tinted palettes (Tokyo Night, Nord) the larger step landed on a flat concrete gray; and secondary text is floored at 4.5:1 against the chrome because palettes with a very dark bright black (Tokyo Night measured 2.9:1) otherwise read washed out on the lifted surface.
 **Rejected**: Pure neutral gray (pasted-on against tinted backgrounds); 100% chroma (stops reading as gray on the same themes); `mix(fg, 6%)` (tracks foreground hue — warm-on-cold themes go beige).
 *Introduced by*: 260915-zeid-chrome-material-surface
 

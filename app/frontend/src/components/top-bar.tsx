@@ -1,8 +1,9 @@
-import { useCallback, useState, useRef, useEffect, useLayoutEffect, type ReactNode } from "react";
+import { useCallback, useState, useRef, useEffect, useLayoutEffect, type ReactNode, type RefObject } from "react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { BreadcrumbDropdown } from "@/components/breadcrumb-dropdown";
 import { LogoSpinner, useBrandLogoSweep } from "@/components/logo-spinner";
 import { useChromeState, useChromeDispatch, TERMINAL_FONT_BOUNDS } from "@/contexts/chrome-context";
+import { STAGE_COLUMN_GAP_PX, STAGE_PADDING_PX } from "@/components/shell/shell";
 import { useOptimisticAction } from "@/hooks/use-optimistic-action";
 import { useToast } from "@/components/toast";
 import { useUpdateClick } from "@/hooks/use-update-click";
@@ -47,7 +48,8 @@ import {
 import { LayoutChip, LayoutMenuRows } from "@/components/layout-chip";
 import { QuakeLauncher } from "@/components/quake-launcher";
 import { useIsMobile } from "@/hooks/use-is-mobile";
-import { computeVisibleCount } from "@/lib/top-bar-overflow";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import { computeVisibleCount, orderForFit } from "@/lib/top-bar-overflow";
 import type { GuiPaletteAction } from "@/lib/palette/gui";
 import type { GuiQuality } from "@/lib/gui-posture";
 import { GuiToolbarMobileOverflow } from "@/components/gui-toolbar";
@@ -100,6 +102,12 @@ type RegistryEntry = {
    *  chevron block. The mobile surface-switch group uses this: it is the
    *  primary mobile tile-switch affordance, so other chips drop first. */
   pinned?: boolean;
+  /** When true the entry is the LAST fit candidate to overflow, regardless of
+   *  its bar position: the fit consumes the pyramid from its L1 head, but a
+   *  `dropLast` entry is moved to the tail of the fit ORDER while keeping its
+   *  registry slot in the bar. The desktop surface-toggle group uses this — it
+   *  sits leftmost in the cluster yet is the cluster's most important control. */
+  dropLast?: boolean;
   /** Chevron-menu section (260731-oiho) — Tiles / View / Window / App. */
   menuGroup: MenuGroup;
   barRender: () => ReactNode;
@@ -264,6 +272,72 @@ function HamburgerIcon({ isOpen }: { isOpen: boolean }) {
       {/* Internal divider — separates the panel slot from the content area */}
       <line x1={dividerX} y1="3.5" x2={dividerX} y2="14.5" />
     </svg>
+  );
+}
+
+/**
+ * The sidebar column's head, painted OVER the top bar's left end while the
+ * desktop sidebar is open: the brand anchor (home affordance) and the sidebar
+ * toggle, aligned over the sidebar column below.
+ *
+ * Why paint over the bar rather than restructure the DOM: the top bar mounts
+ * once in the persistent root layout above `<Shell>`, and Shell owns the
+ * sidebar per route (drag-resize, zen override and the mobile drawer hang off
+ * its stage), so a real root-grid column spanning the bar row would be a large
+ * refactor. Since the header wash, the stage ground and the sidebar aside all
+ * paint the same `bg-bg-chrome` material, an absolutely positioned head is
+ * visually identical to that column — and the header's `border-b-[3px]` stays
+ * on ONE full-width element, so the bottom seam reads as a single continuous
+ * line (the head carries no border of its own). The illusion holds only while
+ * those surfaces share the chrome material.
+ *
+ * `width` is the sidebar track plus the stage padding and column gap
+ * (`STAGE_PADDING_PX` / `STAGE_COLUMN_GAP_PX`, imported from shell.tsx by the
+ * caller), so the head's right edge lands exactly on the content column's
+ * left edge.
+ */
+/** Minimum bar width the head must leave beside itself. The bar's own
+ *  degradation (crumb collapse, the right cluster's overflow fit) was tuned
+ *  for a bar at least as wide as the desktop breakpoint; below that the head
+ *  yields and the classic bar returns, so the breadcrumb never spills into the
+ *  centered heading. */
+const HEAD_MIN_BAR_PX = 600;
+
+function SidebarHead({
+  width,
+  onToggleSidebar,
+  hamburgerOpen,
+  brandSweep,
+  toggleRef,
+}: {
+  width: number;
+  onToggleSidebar: () => void;
+  hamburgerOpen: boolean;
+  brandSweep: ReturnType<typeof useBrandLogoSweep>;
+  toggleRef: RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <div className="absolute inset-y-0 left-0 flex items-center gap-2 pl-3 pr-3" style={{ width }}>
+      <Tip label="Host">
+        <a
+          href="/"
+          aria-label="RunKit home"
+          className="rk-brand-glitch flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors"
+          onMouseEnter={brandSweep.onMouseEnter}
+        >
+          <LogoSpinner size={20} loading={false} svgRef={brandSweep.svgRef} />
+          <span className="text-xs font-bold tracking-wide">RunKit</span>
+        </a>
+      </Tip>
+      <button
+        ref={toggleRef}
+        onClick={onToggleSidebar}
+        aria-label="Toggle navigation"
+        className={`ml-auto ${controlClass({ variant: "icon", rest: "border-border hover:border-text-secondary text-text-primary" })}`}
+      >
+        <HamburgerIcon isOpen={hamburgerOpen} />
+      </button>
+    </div>
   );
 }
 
@@ -586,6 +660,46 @@ export function TopBar({
   // The Host page (`/`) has no sidebar, so it renders no hamburger. Every other mode
   // (terminal / server / board) has a Shell sidebar and shows the toggle.
   const hasSidebar = mode !== "host";
+  const { sidebarWidth } = useChromeState();
+  // The sidebar head covers the stage's sidebar track plus the stage padding
+  // and column gap, so its right edge lands on the content column's left edge.
+  // The numbers come from Shell's exported stage constants — the head and the
+  // stage cannot drift apart. Zen mode hides the whole bar upstream, so a
+  // zen-hidden sidebar with the preference still `open` never draws a head.
+  // The head is a layout decision, not just a color one: it takes its width
+  // out of the bar, and the bar's breakpoint-gated content (history arrows,
+  // crumb floors, the heading anchor) is sized for the VIEWPORT, not for what
+  // is left of the bar. So the head shows only while the bar keeps at least
+  // HEAD_MIN_BAR_PX beside it; narrower, the bar reclaims its full width and
+  // the toggle and brand return to the left cluster.
+  const headTrack = sidebarWidth + STAGE_PADDING_PX + STAGE_COLUMN_GAP_PX;
+  const barKeepsRoom = useMediaQuery(`(min-width: ${headTrack + HEAD_MIN_BAR_PX}px)`);
+  const sidebarHeadWidth = !isMobile && hasSidebar && sidebarOpen && barKeepsRoom ? headTrack : 0;
+  const headShown = sidebarHeadWidth > 0;
+
+  // Focus handoff across the toggle's node swap: the head's toggle and the
+  // cluster's toggle are different buttons, and clicking either one unmounts
+  // it (the head appears/disappears with the sidebar), so focus would fall
+  // to the document body. The click records the replacement node; the effect
+  // focuses it once the swap commits. On mobile the head never shows and the
+  // cluster toggle stays mounted — no swap, no handoff.
+  const headToggleRef = useRef<HTMLButtonElement>(null);
+  const clusterToggleRef = useRef<HTMLButtonElement>(null);
+  const toggleFocusTargetRef = useRef<"head" | "cluster" | null>(null);
+  const handleHeadToggle = () => {
+    toggleFocusTargetRef.current = "cluster";
+    onToggleSidebar();
+  };
+  const handleClusterToggle = () => {
+    if (!isMobile) toggleFocusTargetRef.current = "head";
+    onToggleSidebar();
+  };
+  useLayoutEffect(() => {
+    const target = toggleFocusTargetRef.current;
+    toggleFocusTargetRef.current = null;
+    if (!target) return;
+    (target === "head" ? headToggleRef : clusterToggleRef).current?.focus();
+  }, [headShown]);
 
   // Move-don't-copy (260704-pr0p): the left breadcrumb always ends at the
   // PARENT; the current-page leaf is the centered heading. So the server crumb
@@ -594,6 +708,12 @@ export function TopBar({
   // the leaf and moves to the center heading, leaving the left breadcrumb at
   // brand + hamburger. The Host page and board have no left server crumb.
   const showServerCrumb = mode === "terminal" && !!server;
+  // The `›` before the first crumb belongs to the brand root crumb; with the
+  // brand in the sidebar head the nav's first crumb has nothing to its left.
+  const rootSeparator = !headShown;
+  // The session crumb follows the server crumb when there is one, else it is
+  // the nav's first crumb.
+  const sessionSeparator = showServerCrumb || rootSeparator;
   const serverHref = `/${encodeURIComponent(server)}`;
   const navigate = useNavigate();
 
@@ -714,9 +834,11 @@ export function TopBar({
   // + the `Board: Unpin Focused Pane` palette action. The split is absent when
   // the board is empty (no `focusedPane`); the Kill row is disabled then.
   const rightItems: RegistryEntry[] = [
-    // Surface-toggle group — terminal-only, at the registry's L1 HEAD (first
-    // fit candidate to drop, leftmost in the bar): the retired right rail's
-    // open-tile toggles relocated as ONE bordered sub-group. One entry (not
+    // Surface-toggle group — terminal-only, at the registry's L1 HEAD
+    // (leftmost in the bar) but `dropLast`: it is the cluster's most
+    // important control, so it overflows only after every other fit
+    // candidate has. The retired right rail's open-tile toggles relocated as
+    // ONE bordered sub-group. One entry (not
     // three) so the probe measures the whole group once and the bar/menu
     // renderings share one slot-data source. Overflowed, it renders one
     // checkbox row per shown surface under the Tiles menu section. Hidden
@@ -733,6 +855,7 @@ export function TopBar({
       menuGroup: "tiles",
       hidden: !(mode === "terminal" && currentWindow && surfaceToggles),
       pinned: surfaceToggles?.mode === "switch",
+      dropLast: true,
       barRender: () =>
         surfaceToggles ? <SurfaceToggleGroup toggles={surfaceToggles} /> : null,
       menuRender: () =>
@@ -984,6 +1107,12 @@ export function TopBar({
   // probe's children must stay index-aligned with the widths array the fit
   // reads, so the probe renders exactly this list.
   const fitCandidates = candidates.filter((e) => !e.menuOnly && !e.pinned);
+  // Fit ORDER: the pyramid (registry order) with `dropLast` entries moved to
+  // the tail, so they are the last to overflow. Bar RENDER order stays the
+  // registry order — a `dropLast` entry keeps its screen slot. The probe
+  // renders in fit order so its measured widths stay index-aligned with what
+  // `computeVisibleCount` consumes.
+  const fitOrder = orderForFit(fitCandidates);
 
   // Measurement: one ResizeObserver on the right cell + a hidden probe row that
   // renders every FIT candidate's BAR form so we always know each real width
@@ -1010,7 +1139,7 @@ export function TopBar({
   // fit, so they are deliberately absent from this key; the PINNED set rides
   // along (a pinned entry appearing/disappearing changes the reserved width).
   const candidateKey =
-    fitCandidates.map((c) => c.id).join(",") + "|" + pinnedItems.map((c) => c.id).join(",");
+    fitOrder.map((c) => c.id).join(",") + "|" + pinnedItems.map((c) => c.id).join(",");
 
   useLayoutEffect(() => {
     const cell = rightCellRef.current;
@@ -1060,15 +1189,16 @@ export function TopBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateKey, mode, updateKey, showChip]);
 
-  // Keep the LAST `visibleCount` fit candidates in-bar (the L3-end suffix); the
-  // rest (L1-end prefix) overflow. Surviving buttons keep their screen positions
-  // — dropping L1 leftward never shifts the L2/L3 tail. Menu rows list the
+  // Keep the LAST `visibleCount` entries of the fit ORDER in-bar (the L3-end
+  // suffix plus any `dropLast` entries); the rest (L1-end prefix) overflow.
+  // Surviving buttons keep their screen positions — dropping L1 leftward never
+  // shifts the L2/L3 tail, and a surviving `dropLast` entry stays in its slot. Menu rows list the
   // menuOnly entries (260731-oiho) plus the overflowed controls in pyramid order
   // (registry order = L1 → L2 → L3): deriving the overflow list by filtering the
   // FULL candidate list against the visible set keeps registry order for free.
-  const splitAt = fitCandidates.length - visibleCount;
-  const visibleItems = fitCandidates.slice(splitAt);
-  const visibleIds = new Set(visibleItems.map((e) => e.id));
+  const splitAt = fitOrder.length - visibleCount;
+  const visibleIds = new Set(fitOrder.slice(splitAt).map((e) => e.id));
+  const visibleItems = fitCandidates.filter((e) => visibleIds.has(e.id));
   const overflowItems = candidates.filter((e) => !visibleIds.has(e.id) && !e.pinned);
   const overflowRows: OverflowMenuRow[] = overflowItems
     .map((e) => ({ id: e.id, group: e.menuGroup, node: e.menuRender() }))
@@ -1090,8 +1220,22 @@ export function TopBar({
     // window.runkitShell before any SPA script runs, so it is stable for the
     // page's lifetime.
     <header
-      className={`px-3 ${isShell() ? "" : "pt-[env(safe-area-inset-top)]"} border-b-[3px] border-border`}
+      className={`relative px-3 ${isShell() ? "" : "pt-[env(safe-area-inset-top)]"} border-b-[3px] border-border`}
+      // While the head shows, shift the bar's own grid right of the content
+      // column's left edge; the +12 restores the `px-3` offset relative to that
+      // edge (the grid otherwise starts 12px in from the window edge). Hidden:
+      // no inline padding — `px-3` alone.
+      style={headShown ? { paddingLeft: sidebarHeadWidth + 12 } : undefined}
     >
+      {headShown && (
+        <SidebarHead
+          width={sidebarHeadWidth}
+          onToggleSidebar={handleHeadToggle}
+          hamburgerOpen={hamburgerOpen}
+          brandSweep={brandSweep}
+          toggleRef={headToggleRef}
+        />
+      )}
       {/* 3-column grid. At ≥ sm it is `1fr auto 1fr`: the center cell is truly
           centered regardless of asymmetric left/right widths. Left = left
           cluster (hamburger + breadcrumb nav, 260720-ap63), center = the
@@ -1108,27 +1252,33 @@ export function TopBar({
           comment below). */}
       <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 py-2">
         {/* Left cluster (260720-ap63): a flex wrapper so the hamburger — a
-            drawer toggle, NOT a breadcrumb item — sits FIRST, outside the
-            breadcrumb nav landmark, with the nav beside it inside the `1fr`
-            left cell (the center heading's true centering is untouched).
-            `min-w-0` lets the nav shrink below its content inside `1fr`. */}
+            drawer toggle, NOT a breadcrumb item — sits outside the breadcrumb
+            nav landmark, with the nav beside it inside the `1fr` left cell
+            (the center heading's true centering is untouched). The hamburger
+            leads the cluster only while the sidebar head is not shown; with
+            the head up (desktop, sidebar open) the toggle and brand live in
+            the head and the history arrows lead. `min-w-0` lets the nav
+            shrink below its content inside `1fr`. */}
         {/* One warm-tip cluster per chrome region (260722-73al): the left
             breadcrumb cluster shares a TipGroup so sweeping across crumbs
             opens sibling tips instantly (macOS-menu behavior). */}
         <TipGroup>
         <div className="flex items-center gap-1.5 min-w-0">
           {/* Hamburger icon — toggles sidebarOpen (one boolean covers both
-              desktop grid column and mobile overlay). First element of the left
-              cluster (standard drawer-toggle position). Not rendered on the
+              desktop grid column and mobile overlay). Renders as the left
+              cluster's first element (standard drawer-toggle position) EXCEPT
+              while the sidebar head is shown — the toggle lives in the head
+              then and the history arrows lead the cluster. Not rendered on the
               Host page, which has no sidebar — the history arrows lead there
               (no ghost slot reserved). Uses the shared fixed-size button token
               (260731-oiho — 28px fine / 30px coarse) so it renders the SAME box
               as its siblings (HistoryNav arrows / the right cluster); rk-glint
               flips the border green on hover. Keeps its primary text color
               (the toggle carries page-level chrome weight). */}
-          {hasSidebar && (
+          {hasSidebar && !headShown && (
             <button
-              onClick={onToggleSidebar}
+              ref={clusterToggleRef}
+              onClick={handleClusterToggle}
               aria-label="Toggle navigation"
               className={controlClass({ variant: "icon", rest: "border-border hover:border-text-secondary text-text-primary" })}
             >
@@ -1138,9 +1288,9 @@ export function TopBar({
 
           {/* Browser-history ◀ ▶ arrows — LEFT cluster as of 260731-oiho
               (macOS convention: sidebar toggle → back → forward → brand
-              crumb; the pair leads the cluster on the Host page). Global
-              chrome on all four modes; moving them here deleted the center
-              box's width-compensation hack. */}
+              crumb; the pair leads the cluster on the Host page and while the
+              sidebar head shows). Global chrome on all four modes; moving them
+              here deleted the center box's width-compensation hack. */}
           <HistoryNav />
 
           {/* Breadcrumb nav (260715-q8ey overlap fixes): `overflow-hidden`
@@ -1151,7 +1301,11 @@ export function TopBar({
               breakpoint-hidden there (brand, server, session, the collapse
               rung), so the nav renders empty and a floor would only push the
               left-aligned heading right (the mobile grid content-sizes this
-              column). `flex-1` makes the nav claim the left cell's leftover
+              column). While the sidebar head shows the floor is OFF too
+              (`min-w-0`): the head takes its width out of the bar, and a
+              rigid floor in the `1fr` left track would spill the nav into
+              the centered heading — the crumb collapse (`… ▾`) absorbs the
+              squeeze instead. `flex-1` makes the nav claim the left cell's leftover
               width at `sm+` regardless of content size, so the crumb section's
               clientWidth stays the available-space signal even while collapsed
               (a content-sized nav would shrink to the `… ▾` trigger and the
@@ -1164,18 +1318,21 @@ export function TopBar({
               nav clips at its floor. */}
           <nav
             aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-sm overflow-hidden sm:min-w-[150px] flex-1"
+            className={`flex items-center gap-1.5 text-sm overflow-hidden flex-1 ${headShown ? "min-w-0" : "sm:min-w-[150px]"}`}
           >
             {/* Brand root crumb — logo + wordmark, links to `/`. The nav's
                 first child (the breadcrumb's root — the `›` separator starts
                 after it); IS the home affordance ON ≥sm (no separate "Host"
-                crumb). Below `sm` the whole crumb is gone (the `hidden
-                sm:contents` wrapper — a wrapper, not classes on the anchor,
-                because `hidden` and CRUMB_BOX's `inline-flex` are conflicting
-                display utilities whose winner would depend on stylesheet
-                order): on phones the brand + home affordance live in the
-                sidebar's brand row instead (SidebarBrand), so the left cluster
-                spends its scarce 375px width on crumbs that navigate. */}
+                crumb). Not rendered while the sidebar head is shown — the head
+                carries the brand anchor then, and `RunKit home` must stay
+                unique in the document. Below `sm` the whole crumb is gone (the
+                `hidden sm:contents` wrapper — a wrapper, not classes on the
+                anchor, because `hidden` and CRUMB_BOX's `inline-flex` are
+                conflicting display utilities whose winner would depend on
+                stylesheet order): on phones the brand + home affordance live
+                in the sidebar's brand row instead (SidebarBrand), so the left
+                cluster spends its scarce 375px width on crumbs that navigate. */}
+            {!headShown && (
             <span className="hidden sm:contents">
             <Tip label="Host">
             <a
@@ -1196,6 +1353,7 @@ export function TopBar({
             </a>
             </Tip>
             </span>
+            )}
 
             {mode === "board" ? (
               // Board mode keeps ONLY the counts/hint on the left (move-don't-copy,
@@ -1225,7 +1383,7 @@ export function TopBar({
                   // mobile load never renders. The CSS gate keeps the
                   // breakpoint hides as the unconditional outer rungs.
                   <span className="hidden sm:contents">
-                    <BreadcrumbSeparator />
+                    {rootSeparator && <BreadcrumbSeparator />}
                     {/* The collapse rung's rendering: ONE crumb-styled trigger
                         whose menu carries both levels (server → its route;
                         session → the current window's route, current) so each
@@ -1260,7 +1418,7 @@ export function TopBar({
                     fragment or hard-clip without its `…`. */}
                 {showServerCrumb && (
                   <span className="hidden md:flex items-center gap-1.5 min-w-0">
-                    <BreadcrumbSeparator />
+                    {rootSeparator && <BreadcrumbSeparator />}
                     <Tip label="tmux Server">
                       <a
                         href={serverHref}
@@ -1287,7 +1445,22 @@ export function TopBar({
                   // the siblings' box styling with no hover affordance or caret.
                   // Same 6ch ellipsis-reserve floor as the server crumb.
                   <span className="hidden sm:flex items-center gap-1.5 min-w-0">
-                    <BreadcrumbSeparator />
+                    {/* The `›` ties the session crumb to the crumb on its
+                        LEFT. With the head up (`!rootSeparator`) that left
+                        crumb is the server crumb, which is itself hidden
+                        below `md` — gate the separator on the same
+                        breakpoint or the session crumb opens with an orphan
+                        `›` in the sm–md band. With the brand in the nav
+                        (`rootSeparator`) a left crumb always exists at
+                        `sm+`, so no gate. */}
+                    {sessionSeparator &&
+                      (showServerCrumb && !rootSeparator ? (
+                        <span className="hidden md:contents">
+                          <BreadcrumbSeparator />
+                        </span>
+                      ) : (
+                        <BreadcrumbSeparator />
+                      ))}
                     <span className={`${CRUMB_BOX_CLASS} min-w-[calc(6ch+0.875rem)]`}>
                       <span className="truncate max-w-[16ch]">{sessionName}</span>
                     </span>
@@ -1314,7 +1487,7 @@ export function TopBar({
                 >
                   {showServerCrumb && (
                     <span className="hidden md:flex items-center gap-1.5">
-                      <BreadcrumbSeparator />
+                      {rootSeparator && <BreadcrumbSeparator />}
                       <span className={CRUMB_BOX_CLASS}>
                         <span className="truncate max-w-[6ch]">{server}</span>
                       </span>
@@ -1322,7 +1495,14 @@ export function TopBar({
                   )}
                   {sessionName && (
                     <span className="hidden sm:flex items-center gap-1.5">
-                      <BreadcrumbSeparator />
+                      {sessionSeparator &&
+                        (showServerCrumb && !rootSeparator ? (
+                          <span className="hidden md:contents">
+                            <BreadcrumbSeparator />
+                          </span>
+                        ) : (
+                          <BreadcrumbSeparator />
+                        ))}
                       <span className={CRUMB_BOX_CLASS}>
                         <span className="truncate max-w-[6ch]">{sessionName}</span>
                       </span>
@@ -1563,7 +1743,7 @@ export function TopBar({
             inert
             className="absolute -left-[9999px] top-0 flex items-center gap-3 pointer-events-none"
           >
-            {fitCandidates.map((e) => (
+            {fitOrder.map((e) => (
               <span key={e.id} className="flex items-center shrink-0">
                 {e.barRender()}
               </span>
