@@ -103,7 +103,7 @@ jobs:
     name: E2E (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     # Blocking gate (since 260602-a1wo). The e2e suite is SSE-driven and shares
-    # one dev + tmux server per shard; under a 2-vCPU runner's contention a
+    # two rigs per shard; under a 4-vCPU runner's contention a
     # rotating subset of tests can lose the timing race (the flaky set is
     # non-deterministic). Readiness gates (see tests/e2e/_ready.ts) reduce this,
     # and proper de-flaking (deterministic polls / optimistic-aware waits) is a
@@ -135,12 +135,21 @@ jobs:
 
       - uses: extractions/setup-just@e33e0265a09d6d736e2ee1e0eb685ef1de4669ff # v3
 
-      # The e2e harness runs against a live dev server: tmux backs the sessions,
-      # air gives the backend live-reload, Vite serves the frontend. Each shard
-      # is its own runner with its own /tmp/tmux-* socket dir, so every shard
-      # derives the same per-worktree e2e identity (rk-test-e2e-<token>-*,
-      # scripts/e2e-env.sh) in an isolated VM — that is what makes sharding
-      # (rather than in-process workers) the safe parallelism.
+      # The e2e harness runs against live dev servers: tmux backs the sessions,
+      # the Go backend and Vite serve the app. Each shard is its own runner
+      # with its own /tmp/tmux-* socket dir, so every shard derives the same
+      # per-worktree e2e identity (rk-test-e2e-<token>-*, scripts/e2e-env.sh)
+      # in an isolated VM. Inside a shard, RK_E2E_WORKERS (below) has the
+      # harness start that many complete rigs — one tmux sub-family + backend
+      # + Vite per Playwright worker — so a shard runs two spec files at once
+      # without the SSE cross-talk a shared rig would cause.
+      - name: Runner shape
+        # RK_E2E_WORKERS below is sized to the runner's vCPU count (4 on the
+        # public-repo ubuntu-latest); this keeps the real shape visible in the
+        # log so a runner change is noticed rather than felt as flakes.
+        run: |
+          echo "vCPUs: $(nproc)"
+          free -g
       - name: Install tmux
         # apt has no network timeout by default — a stalled mirror connection
         # (the recurring azure.archive.ubuntu.com flake) hangs this step until
@@ -193,6 +202,12 @@ jobs:
         run: just setup
 
       - name: Run e2e tests (shard ${{ matrix.shard }}/4)
+        # Two rigs per shard (scripts/test-e2e.sh multi-rig lane). Two, not
+        # more: each rig is a Chromium + Vite + Go trio and the suite's timing
+        # gates already feel runner contention; more workers than that on a
+        # 4-vCPU runner would trade wall-clock for flakes.
+        env:
+          RK_E2E_WORKERS: 2
         run: just test-e2e --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright report on failure
