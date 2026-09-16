@@ -1,0 +1,146 @@
+# Web Tile — Native Browser Engine
+
+**Drafted**: 2026-09-16 · against `b020adf9` · from the 2026-09-16 `/fab-discuss` session on replacing the web tile's iframe with Electron's Chromium renderer
+**Shape**: 1 spike + 5 changes, one repo (run-kit) — **0 → 1 → {2 ∥ 3-desktop} → 3-frontend → 4 → 5**: the spike is a throwaway branch whose output is a verdict; 1 is a behavior-preserving refactor every later change stands on; 2 and the desktop half of 3 are file-disjoint and may run in parallel from their own worktrees; 3's frontend engine needs both; 4 and 5 are sequential
+**Contract of record**: `docs/wiki/web-tile-native-browser-studies.html` (§3 engine contract, §4 architecture + bridge channels, §5 layering rule set + live mock, §6 containment table, §7 chord forwarding, §8 parity matrix, §13 change stack, §14 proposed decisions) · pre-change truth in `docs/memory/run-kit/ui/lenses-and-layout.md` § Iframe Window and `docs/memory/run-kit/desktop-shell.md` § Host Views / § Security Wiring / § `window.runkitShell` Bridge · design authority `docs/specs/window-views.md` (web row), `docs/specs/surface-layout.md`, `docs/specs/right-panel.md` § Surface Registry
+
+## Decisions of record
+
+- **Two engines behind one chrome; the iframe engine is never removed.** The SPA is served by rk to browsers, PWAs and phones, so `iframe` stays the universal engine. The shell gets a `native` engine (Electron `WebContentsView`). The chrome — tab strip, address bar, find bar, error surface, onboarding — becomes engine-blind and renders per an engine's `supports.*` flags, never per `crossOrigin`.
+- **`WebContentsView`, as a child of the host view.** Electron's maintained API and the class the shell already uses for hosts. Web views are added under the (window, host) host view with `View.addChildView`, so a host switch, a host removal and a window close carry them along. `<webview>` is the fallback only if the spike's layering verdict is negative; `BrowserView` is deprecated and out.
+- **Layering rule.** Modal-class overlays (palette, dialogs, settings panel, quake drawer, screen-break egg, mobile drawer) hide the web views while open; transient edge overlays (tips, flyouts, popovers) clip; toasts move over chrome; sash drags hide until release. One SPA-side overlay-presence registry carries the signal and lands before the engine.
+- **Containment.** Guest views get no preload, `sandbox` + `contextIsolation`, a dedicated `persist:rk-web` partition separate from the SPA's session, http(s)-only navigation (registry members are exempt from the host-origin allowlist but subject to a scheme allowlist), deny-by-default permissions, `will-download` default saving, and external popups in v1. Every `web:*` IPC handler is gated on a registered-host sender and on tabKey membership under that sender.
+- **Addressing.** The native engine loads exactly what the iframe loads, made absolute against the host origin (`new URL(toProxySrc(url), hostOrigin)`). `/proxy/{port}` stays the path for ports — it is the tunnel for SSH remote hosts. Direct-localhost for loopback hosts is a later rung, not in this plan.
+- **Zoom source of truth** (open in the study): proposed that the SPA's localStorage buckets stay authoritative across both engines and the native engine re-applies the factor on every `did-navigate`. The spike confirms Chromium's per-origin zoom inside the partition does not fight it; if it does, change 4 records the resolution.
+- **Lazy views, no cap.** A view is created when its tab is first active and stays created (P3). Hidden = `setVisible(false)`, which Chromium throttles. Memory per view is measured in the spike and recorded in the study; a warm cap is the knob if numbers demand it.
+- **Per-viewer opt-out.** A palette entry `Web: Use embedded browser` toggles a localStorage flag (Constitution IV per-viewer state); default on in a shell that carries the `web` bridge group. This is the escape hatch while the native engine matures; it is not a settings-registry key.
+- **Rejected** (recorded in the study § 12): stripping `X-Frame-Options` in a backend proxy (cookies at the rk origin, CSP/relative-URL/WS breakage, an open proxy on the daemon); replacing the iframe outright (breaks every non-shell viewer); `<webview>` as the primary engine (Electron's do-not-use recommendation, `webviewTag: true` on the hardened host view); `BrowserView`. Parked: the `code` lens on the same engine (different problem set — same-origin service worker, folder-follow reads the frame URL); `capturePage` as an agent screenshot verb.
+
+## Standing context (carry into every change's intake)
+
+- **Frontend files**: `app/frontend/src/components/iframe-window.tsx` (+ `.test.tsx`) — `IframeWindow` chrome, inner `WebFrame` (one per tab), `FrameChromeState`, `FrameHandle`, the load-gated attach seam, the probes, `refresh`/`navigate`/`retry`; `components/surface-layout.tsx` (~1570, the single `IframeWindow` mount: `onWriteUrl`, strip verbs, `onInteract`, `onPageMeta`, `shouldReclaimChord("web")`); `components/find-bar.tsx`; `lib/web-url.ts` (`classifyAddress`, `toProxySrc`, `displayForm`, `webTabTitle`), `lib/web-zoom.ts` (`WEB_ZOOM_EVENT`, buckets), `lib/find-in-page.ts` (`WEB_FIND_OPEN_EVENT`, the Highlight engine), `lib/zoom-gesture.ts`, `lib/keybindings.ts` (`webOnly` bindings `web-find` ⌘F / `web-address` ⌘L; the reclaim predicate at ~599–627), `lib/shell.ts` (bridge narrowing — the `isServersAddDirectBridge` additive pattern), `lib/focus-memory.ts` + `docs/memory/run-kit/ui/focus-ownership.md` (recording asymmetry: `onInteract` is the only recorder for iframe tiles). Overlays: `components/command-palette.tsx`, `dialog.tsx` consumers (`create-session-dialog`, `settings-dialog`, `host-form-dialog`, `server-dialogs`, `spawn-agent-dialog`, `operator-compose-dialog`, `cron-create-dialog`, `tmux-commands-dialog`, `gui-*-dialog`), `settings-all-panel.tsx`, `quake-terminal.tsx`, `toast.tsx`, `tip.tsx`, `sidebar/row-flyout-card.tsx`, `sidebar/marker-pad.tsx`, `sidebar/pin-popover.tsx`, `swatch-popover.tsx`, `theme-picker-list.tsx`, `compose-history-flyout.tsx`, the screen-break egg (`ui/screen-break-eggs.md`).
+- **Desktop files**: `app/desktop/src/main.ts` — `hostWebPreferences()` (~487), `createHostView` (~665), `attachHostView` (~780), `destroyHostViews`/`destroyWindowViews` (~830/861), `isHostsSender` (~1623), `registerIpcHandlers` (~1675), the app-level `web-contents-created` handler (~2150: `setWindowOpenHandler` + `guardNavigation` on `will-navigate`/`will-redirect`), `session.defaultSession.setPermissionRequestHandler` + `ALLOWED_PERMISSIONS` (~171); `views.ts` (the pure registry pattern to copy); `preload.ts` (`contextBridge` groups; add `web`); `window-open.ts` (`isHttpUrl`, `windowOpenAction`). Electron `^43.2.0`; tests are `node --test dist/**/*.test.js` over electron-free modules only.
+- **Backend**: nothing changes. `api/proxy.go` (`/proxy/{port}`), `api/framecheck.go` (`/api/frame-check`) stay for the iframe engine; `api/present`, `/present/` routes unchanged.
+- **E2E**: `tests/e2e/web-tabs.spec.ts` (17), `web-tile-chrome.spec.ts` (3), `web-tile-find.spec.ts` (4), `web-tile-zoom.spec.ts` (5), `web-view-lens.spec.ts` (8), `present-viewer.spec.ts` (12), `present-auto-expand.spec.ts` (3), `surface-layout.spec.ts` (15), shared fixture `_web-tile.ts`. All drive the iframe engine and stay green through every change. No Electron lane exists (`ci.yml`: Backend, Frontend, Code bridge, E2E ×4 shards) — change 5 adds one.
+- **Precedents to reuse**: `views.ts` (electron-free registry over an opaque handle, `node --test`); `window-open.ts` (pure policy module); the `servers:*` sender gate (`isHostsSender`) and `parse*Payload` validators; the additive bridge-group narrowing in `lib/shell.ts`; the chord-reclaim re-dispatch (`iframe-window.tsx` `onKey`: `preventDefault` + `stopImmediatePropagation` + synthetic bubbling `KeyboardEvent` on `document`); the `pointer-events: none` mid-drag rule in `surface-layout.tsx` (~1147, 2242); the code tile's focus hop (`focus-hop` chord) for Escape-returns-focus; `viewLoadFailed` + `nextLoadFailed` for main-frame failure tracking.
+- **Constitution**: I (argv-only subprocess — none added; the scheme allowlist and sender gates are the security surface here), IV (no new settings surface — the opt-out is per-viewer localStorage; no new routes), V (every new action — Inspect page, the opt-out — is a palette entry; `Web:` chords keep palette parity), Test Intent Comments (every e2e `test()` touched gets its JSDoc updated in the same commit), code-comment rule (constraints, not history; no change-ID citations).
+- **Verification per change**: `cd app/frontend && npx tsc --noEmit`; `just test-frontend` as the unit gate (touched-files-only Vitest has missed cross-file breakage before — project memory); scoped e2e via `just test-e2e <name>.spec` (the `.spec` suffix — a bare name also matches worktree paths); desktop: `cd app/desktop && pnpm run compile && pnpm test`; manual shell run: `RK_DESKTOP_URL=http://localhost:<derived Vite port> just dev-desktop` against `just dev`. **One full `just test-e2e` per worktree at a time**; dispatched workers run single specs only.
+- **Memory hygiene**: lenses-and-layout.md § Iframe Window is rewritten to describe two engines behind one chrome (present-truth, not "was X, now Y"); desktop-shell.md gains § Web Views and a bridge-group row; resolve relative `](x.md)` links across `docs/memory/run-kit/ui/` and the run-kit root before review; regenerate indexes with `fab docs-index` when a description changes.
+
+## Sequencing & merge topology
+
+```
+0 (spike, throwaway) ──▶ 1 (engine seam) ──▶ 2 (overlay presence)  ┐
+                                          └▶ 3d (desktop registry+bridge) ┘──▶ 3f (native engine) ──▶ 4 (parity) ──▶ 5 (e2e lane + docs)
+```
+
+| | 1 | 2 | 3d | 3f | 4 | 5 |
+|---|---|---|---|---|---|---|
+| `iframe-window.tsx` | **split** into chrome + `web-frame-iframe.tsx` | — | — | mounts `web-frame-native.tsx` by engine | engine parity | — |
+| `lib/web-frame-engine.ts` | **new** | — | — | native impl consumes | widened (find/zoom/history) | — |
+| `lib/overlay-presence.ts` + overlay components | — | **new** + `useOccludes` | — | consumer | — | — |
+| `app/desktop/src/web-views.ts` + tests | — | — | **new** | — | chord/error modules added | e2e reads it |
+| `main.ts` · `preload.ts` | — | — | `web:*` handlers, partition, guard exemption, `web` group | — | before-input-event, downloads, popups, devtools | — |
+| `lib/shell.ts` | — | — | — | `webBridge()` narrowing | + devtools/find/zoom invokers | — |
+| `keybindings.ts` / palette | — | — | — | opt-out entry | `Web: Inspect page`, chord table export | — |
+| e2e | web-*/present specs green | palette/dialog specs green | — | manual | manual matrix | **new** desktop lane |
+| specs / memory | — | — | — | — | — | window-views · surface-layout · right-panel rows; desktop-shell + lenses-and-layout hydrate |
+
+1 → everything: the seam is what lets `3f` add an engine without touching chrome. 2 ∥ 3d: disjoint trees (frontend overlays vs `app/desktop`). 3f needs 2 (the hide signal) and 3d (the bridge). 4 → 5: the e2e smoke set asserts parity behaviors. Each change is its own fab change + draft PR off fresh `origin/main`, merged on green CI; never stack (a `--base <feature>` PR merges into the feature branch if merged first — project memory).
+
+Lane hints: 0 none (spike); 1 full (component split across three files, many tests); 2 light (one module + a hook call in ~12 components); 3d full (new module, IPC surface, security); 3f full; 4 full; 5 full (CI + docs).
+
+The design study and its `docs/specs/index.md` wiki row land on main with this plan (a docs-only commit before change 0).
+
+---
+
+## Change 0 — spike (branch `spike/web-native-view`, never merged)
+
+**Goal**: answer six questions in one day on a throwaway branch; write the verdicts into the study § 14 and adjust the plan before change 1.
+
+1. **Child hiding on host detach.** Create a `WebContentsView` in `createHostView`'s view with `view.addChildView(child)`, load `https://github.com`, then switch hosts. Does the child disappear with its parent, or stay painted over the incoming host? If it stays, note that the registry must hide explicitly on the switch seam.
+2. **Layering + the hide flash.** Hard-code the SPA (dev build) to send bounds of the web tile's content rect over a temporary IPC and hide the child while the palette is open. Judge the blink; try `setBorderRadius(6)` for the card corners; try a clip variant (shrunken bounds) against a `Tip` over the header verb.
+3. **Sash-drag lag.** Drag a ratio with the child visible, then with the mid-drag hide. Note the frame lag and whether the hide is needed.
+4. **Chord forwarding.** `before-input-event` on the child, match ⌘K / ⌘F / ⌘L / Escape, `preventDefault`, relay to the SPA, re-dispatch a synthetic `KeyboardEvent`. Confirm the palette opens from inside GitHub's page and that typing in the page is otherwise untouched.
+5. **Zoom.** `setZoomFactor(1.25)`, navigate within the site, reload: does Chromium's per-origin zoom in the partition keep or override the factor? Decide the source-of-truth rule.
+6. **Memory.** Process RSS for a blank page, github.com, and a Vite dev server, hidden vs visible. Record in the study § 10.
+7. **`<webview>` twin.** In the same spike, enable `webviewTag: true` on one host view and render a `<webview>` inside the web tile. Compare: layering (free), focus behavior, event coverage. This is the fallback measurement — only adopted if 2 fails.
+
+Deliverable: study § 14 open decisions closed; § 10 numbers filled; a one-paragraph verdict appended to this file under "Spike verdict". No code from the spike is merged.
+
+## Change 1 — engine seam (slug: `web-frame-engine-seam`)
+
+**Intake seed**: The web tile's chrome stops knowing it drives an iframe — a `WebFrameEngine` contract with capability flags sits between `IframeWindow`'s chrome and the per-tab frame, today's frame becomes the `iframe` engine, and every control renders per capability instead of per `crossOrigin`. No behavior change.
+
+1. **`lib/web-frame-engine.ts`** (new, pure types + the `ChordEvent` shape): `WebFrameEngine` with `kind`, `supports: {history, find, meta, zoomGestures, devtools}`, commands (`load`, `reload`, `retry`, `back`, `forward`, `find`, `stopFind`, `setZoom`, `openDevTools?`), and subscriptions (`onState`, `onInteract`, `onChord`). `FrameChromeState` moves here and gains `canGoBack`/`canGoForward` (iframe engine: `supports.history && !crossOrigin`, both `true` — no signal exists, today's semantics) and `find?: {active, total}`.
+2. **`components/web-frame-iframe.tsx`** (new): today's `WebFrame` moved verbatim, implementing the contract. `supports` derives from the same-origin probe on each load: `history/find/meta/zoomGestures = !crossOrigin`, `devtools = false`. The Highlight-API find engine (`lib/find-in-page.ts`) stays behind `find()`/`stopFind()`; the zoom scale wrapper stays behind `setZoom()`; the probes (`checkFrame`, the 502 fetch) stay inside this engine.
+3. **`iframe-window.tsx`** keeps the chrome only: tab strip, address bar, find bar, error surface, onboarding, the document CustomEvent receivers, the zoom bucket persistence. It mounts one engine per tab through a `createEngine(kind)` factory that returns the iframe engine only (this change). Back/forward hide when `!supports.history`; find button disables when `!supports.find`; the header meta reads `state.title` regardless of engine.
+4. **Tests**: `iframe-window.test.tsx` splits — chrome tests stay, frame tests move to `web-frame-iframe.test.tsx`; add a chrome test with a stub engine (capabilities off ⇒ controls hidden/disabled; a pushed `state.title` renders). E2E: run `web-tabs.spec`, `web-tile-chrome.spec`, `web-tile-find.spec`, `web-tile-zoom.spec`, `web-view-lens.spec`, `present-viewer.spec` — all must pass unchanged (no intent-comment edits expected).
+5. **Memory**: lenses-and-layout.md § Iframe Window — introduce the engine seam in present-truth terms (chrome vs engine, capability flags); a Design Decision *The chrome renders per capability, never per origin*.
+
+Non-goals: any native code; any change to the stored `@rk_win_web_<n>` contract; the code lens.
+
+## Change 2 — overlay presence (slug: `overlay-presence-registry`)
+
+**Intake seed**: One SPA-side registry says whether a modal-class overlay is open — the palette, every dialog, the settings panel, the quake drawer, the screen-break egg and the mobile drawer register while open — so a surface that cannot be painted over (the native web view) can hide itself; toasts move over chrome so they never sit on the stage.
+
+1. **`lib/overlay-presence.ts`** (new, pure): a counter with `acquire(kind) → release`, `count()`, `subscribe(cb)`; kinds are `modal | transient` (only `modal` counts toward the hide signal — `transient` is recorded for the clip rule later). Colocated Vitest.
+2. **`hooks/use-occludes.ts`**: `useOccludes(kind, open: boolean)` acquires while `open` and releases on close/unmount. Call sites: `command-palette.tsx`, the `dialog.tsx` primitive (one call covers every dialog consumer — verify each consumer renders through it; `settings-all-panel.tsx` and any bespoke modal get their own call), `quake-terminal.tsx` (open state), the screen-break egg, the mobile sidebar drawer (`shell.tsx`).
+3. **Toasts**: anchor `toast.tsx` over the status bar / top bar band rather than the stage corner (a placement class change; check `toast.test.tsx` and any e2e asserting toast position).
+4. **Tests**: Vitest for the module; one RTL test per registering component asserting acquire/release around open/close (a mocked module). E2E unaffected (the registry is inert with no subscriber) — run `command-palette.spec` and one dialog spec as a smoke.
+5. **Memory**: ui/dialogs-and-state.md gains § Overlay presence; a Design Decision *Overlay presence is a count, not a focus read* (why: focus is stolen by iframes and native views; presence is the truth the engine needs).
+
+Non-goals: any consumer beyond the count; clipping geometry (change 4).
+
+## Change 3 — shell web views (slug: `desktop-web-views`)
+
+Runs as **3d** (desktop) and **3f** (frontend). Same fab change if one worker holds both trees; otherwise two changes `desktop-web-views-bridge` then `web-frame-native-engine`.
+
+**Intake seed (3d)**: The desktop shell can host a web tile's content in a `WebContentsView` under the host view — a `runkitShell.web` bridge group, an electron-free registry keyed (window, host, tabKey), main handlers for create/destroy/bounds/visible/load/reload, a one-channel event relay, a dedicated `persist:rk-web` partition with no preload, and a navigation guard that lets guests browse http(s) while the host allowlist keeps applying to hosts.
+
+1. **`app/desktop/src/web-views.ts`** (new, electron-free, `node --test`): `WebViewsState<H>` keyed by `(windowId, hostId, tabKey)` with the owning host webContents id; `addWebView`, `removeWebView`, `removeHostWebViews`, `findBySender(webContentsId, tabKey)`, `guestIds()` (for the guard exemption). Mirrors `views.ts`.
+2. **`main.ts`**: `guestSession = session.fromPartition("persist:rk-web")` with its own `setPermissionRequestHandler` (deny all in v1) and `on("will-download")` default; `guestWebPreferences()` — `sandbox`, `contextIsolation`, `nodeIntegration: false`, **no preload**, `session: guestSession`. `createWebView(hostEntry, tabKey, url)` → `new WebContentsView({webPreferences})`, `setBackgroundColor`, `setBorderRadius(6)`, `hostEntry.handle.addChildView(view)`, relay `page-title-updated`, `page-favicon-updated`, `did-start-loading`, `did-stop-loading`, `did-fail-load` (ERR_ABORTED excluded, the `nextLoadFailed` rule), `did-navigate`, `did-navigate-in-page`, `focus` → `sender.send("web:event", …)`. In the app-level `web-contents-created` handler: if `contents.id` is a guest, apply a scheme-allowlist guard (`http:`/`https:` pass; everything else `preventDefault`, editor deeplinks and mailto dropped) instead of `isAllowedNavigation`; `setWindowOpenHandler` unchanged (external). Teardown: `destroyHostViews`/`destroyWindowViews` also close that host's web views; `did-navigate` on a host webContents closes its web views (the SPA that owned them is gone).
+3. **IPC** (`registerIpcHandlers`): `web:create`, `web:destroy`, `web:bounds`, `web:visible`, `web:load`, `web:reload`, each gated by `isHostsSender` and resolving the view via `findBySender(event.sender.id, tabKey)`; payload validators beside `parseSetUrlPayload`. Bounds arrive relative to the host view's content and are applied verbatim (`setBounds`).
+4. **`preload.ts`**: `web` group — invokers per channel plus `onEvent(handler)` subscribing to `web:event`. Additive; older SPAs never call it.
+5. **Tests**: `web-views.test.ts` (registry semantics, sender resolution, host teardown); a `node --test` for the guest guard decision as a pure function in `window-open.ts` (`guestNavigationAction(url)`).
+6. **Memory**: desktop-shell.md § Web Views (new) + bridge table row; § Security Wiring gains the guest partition and guard exemption; Design Decisions *Web views hang under the host view*, *Guests get a partition and no preload*.
+
+**Intake seed (3f)**: In a shell that carries the `web` bridge group the web tile mounts a `native` engine — it measures the tile content rect, drives the view over the bridge, feeds the chrome from the event channel, hides while a modal overlay is open, and offers a per-viewer palette toggle back to the iframe engine.
+
+7. **`lib/shell.ts`**: `webBridge()` narrowing (`canShellWeb()`), typed invokers, `onWebEvent`.
+8. **`components/web-frame-native.tsx`** (new): implements `WebFrameEngine` with `supports = {history: true, find: false, meta: true, zoomGestures: true, devtools: false}` for this change (find/devtools arrive in 4); `tabKey` = a per-mount nonce + slot; `ResizeObserver` on the engine's placeholder element + a `useLayoutEffect` after layout/zoom/ratio changes → `web:bounds` (rect relative to the viewport; the host view fills the window content area, so viewport coordinates are host-view coordinates — confirm the titlebar strip offset); `web:visible` from `active && !overlayPresence.modal && !dragging`; the placeholder renders the tile background so a hidden view leaves the card, not a hole. State from `onWebEvent` demuxed by tabKey. `onInteract` from the `focus` event.
+9. **`iframe-window.tsx`**: `createEngine` picks `native` when `canShellWeb() && !viewerOptedOut()`; the opt-out lives in `lib/web-engine-pref.ts` (localStorage, try/catch). Palette entry `Web: Use embedded browser` (checkbox-style label toggling, shell-gated like the `Server: Switch` entries) — `keyboard-and-palette.md` conventions; no chord.
+10. **Drag hide**: `surface-layout.tsx` exposes its `draggingIndex !== null || draggingIntersection` as a prop or context the engine reads (today's `pointer-events-none` site).
+11. **Tests**: Vitest for the native engine with a mocked bridge (bounds sent on resize, visible toggles with presence, events map to state); the palette entry's shell gate. E2E unchanged (no shell in Playwright). Manual: `RK_DESKTOP_URL=… just dev-desktop` — open github.com in a web tile, switch hosts, open the palette, drag a sash, close the window.
+12. **Memory**: lenses-and-layout.md § Iframe Window → § Web Tile (two engines) with the selection rule; keyboard-and-palette.md palette entry row.
+
+Non-goals (3): find, zoom, history buttons, chord forwarding, error copy, devtools, downloads/popups beyond the shipped external policy — all change 4.
+
+## Change 4 — parity (slug: `web-native-parity`)
+
+**Intake seed**: The native engine reaches parity with the iframe engine and passes it — real back/forward with a boundary signal, find with match ordinals through the shared find bar, zoom via the renderer, chord reclaim through `before-input-event`, Escape returns focus, error copy from Chromium's error codes, and a new `Web: Inspect page` palette entry.
+
+1. **History**: `web:back`/`web:forward` → `navigationHistory.goBack/goForward`; every `did-navigate`/`did-navigate-in-page` relays `canGoBack/canGoForward`; the chrome disables at the boundary (both engines' state carries the flags since change 1).
+2. **Find**: `web:find {text, forward, findNext}` → `findInPage`, `found-in-page` relayed as `find: {active, total}`; `web:stop-find` → `stopFindInPage("clearSelection")` on bar close and on the chrome's per-load reset. `supports.find = true`; the `FindBar` UI is unchanged.
+3. **Zoom**: `web:zoom {factor}` → `setZoomFactor`; re-applied on every `did-navigate` (the decision-of-record rule; amend if the spike found Chromium's store cooperative); `zoom-changed` relayed so a ctrl-wheel inside the guest updates the SPA's bucket. The native engine renders no scale wrapper.
+4. **Chords**: `web:chords` payload built in the SPA from the `web`-kind reclaim predicate over the binding registry plus ⌘K and Escape (a pure `lib/web-chord-table.ts` with Vitest); main matches in `before-input-event` (`type === "keyDown"`, code + modifiers — a pure `matchChord` in a new electron-free `app/desktop/src/chords.ts`, `node --test`), `preventDefault`, relays `chord`; the engine re-dispatches a synthetic bubbling `KeyboardEvent` on `document` (the iframe reclaim mechanism). Escape additionally focuses the host webContents main-side.
+5. **Errors**: `did-fail-load` error codes → `TileError` (connection refused/reset on a proxy-kind address ⇒ `dead-port`; name-not-resolved / timed-out / any other main-frame failure ⇒ `unreachable` with Chromium's description as the reason). The `refused` state is unreachable on this engine.
+6. **Downloads & popups**: confirm `will-download` default behavior in the guest partition; popups stay external (the shipped `setWindowOpenHandler`); record the popup-to-tab upgrade as a follow-up idea.
+7. **DevTools**: `web:devtools` → `openDevTools({mode: "detach"})`; `supports.devtools = true`; palette `Web: Inspect page` (shell-gated, absent on the iframe engine) with a header verb only if the header fold budget allows — otherwise palette-only (Constitution V satisfied either way).
+8. **Tests**: `node --test` for `matchChord` and the error mapping; Vitest for the chord table and the engine's state mapping; manual matrix over the four address kinds (present, proxy, relative, external) × {back/forward, find, zoom, ⌘K from inside, Escape, dead port, unreachable}. E2E unchanged.
+9. **Memory**: lenses-and-layout.md § Web Tile — parity table per engine; keyboard-and-palette.md — chord forwarding as the third reclaim mechanism beside the iframe and code seams; desktop-shell.md § Web Views — the chord matcher and error mapping.
+
+## Change 5 — desktop e2e lane + docs (slug: `desktop-e2e-lane-web-docs`)
+
+**Intake seed**: A Playwright Electron lane proves the native engine end to end against the e2e rig, runs in CI, and the specs and memory describe the web tile as two engines behind one chrome.
+
+1. **`app/desktop/tests/e2e/`** with `@playwright/test`'s `_electron.launch({args: ["."], env: {RK_DESKTOP_URL: <rig Vite origin>}})`; `scripts/test-desktop-e2e.sh` derives the same per-worktree rig identity as `scripts/e2e-env.sh` and starts it (or reuses `just dev`); `just test-desktop-e2e` one-liner (Constitution VIII). Smoke set: (a) opening a web tab creates one guest view and its `getBounds()` (via `electronApp.evaluate` over the registry) matches the tile content rect within 1 px; (b) opening the palette hides it; (c) a `page-title-updated` reaches the tab strip; (d) ⌘K from inside the guest opens the palette; (e) a host switch hides the guest with its parent; (f) window close destroys it. Test Intent Comments on every `test()`.
+2. **CI**: a `Desktop (electron e2e)` job in `ci.yml` on ubuntu under `xvfb-run`, after the frontend build; pnpm install in `app/desktop`; artifact the Playwright trace on failure. Also run `pnpm test` (node --test) there if it is not already a CI job.
+3. **Specs**: window-views.md web row — renderer column reads "`IframeWindow` chrome over an engine: iframe (browsers) / native `WebContentsView` (desktop shell)"; surface-layout.md and right-panel.md § Surface Registry web rows likewise; a short § Engines note in window-views.md pointing at the study.
+4. **Memory**: final hydration pass — lenses-and-layout.md § Web Tile complete, desktop-shell.md § Web Views + § Testing, architecture/testing.md gains the desktop lane; `fab docs-index`; relative-link check across the touched folders.
+
+Non-goals: popup-to-tab; direct-localhost for local hosts; the code lens; `capturePage` verbs — each an `idea` entry.
+
+## Spike verdict
+
+_(filled after change 0)_

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Tile Native Browser Studies</title>
+<style>
+  :root{--bg:#0f1117;--bg2:#161a23;--bg3:#1d2230;--fg:#d7dae0;--dim:#8b93a5;--line:#2a3040;--green:#4ade80;--amber:#fbbf24;--red:#f87171;--blue:#7dd3fc;--purple:#c084fc}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  main{max-width:1040px;margin:0 auto;padding:28px 22px 80px}
+  h1{font-size:22px;margin:0 0 6px;color:#fff}
+  h2{font-size:16px;margin:44px 0 10px;padding-top:14px;border-top:1px solid var(--line);color:var(--green)}
+  h2 small{color:var(--dim);font-weight:normal;margin-left:8px}
+  h3{font-size:14px;margin:22px 0 6px;color:var(--blue)}
+  p{margin:8px 0}
+  .sub{color:var(--dim)}
+  .box{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:14px 0}
+  .box.rec{border-color:var(--green)}
+  .box.warn{border-color:var(--amber)}
+  .box.bad{border-color:var(--red)}
+  ul,ol{margin:6px 0 6px 0;padding-left:22px}
+  li{margin:4px 0}
+  code{background:var(--bg3);padding:1px 5px;border-radius:3px;color:#fff}
+  pre{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:12px 14px;overflow-x:auto;font-size:12.5px;line-height:1.4;color:#cfd4dd}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}
+  th{background:var(--bg3);color:#fff;font-weight:600}
+  .ok{color:var(--green)}.meh{color:var(--amber)}.no{color:var(--red)}
+  .tag{display:inline-block;font-size:11px;padding:0 6px;border:1px solid var(--line);border-radius:3px;color:var(--dim);margin-left:6px;vertical-align:middle}
+  .tag.rec{border-color:var(--green);color:var(--green)}
+  .tag.bad{border-color:var(--red);color:var(--red)}
+  .tag.park{border-color:var(--blue);color:var(--blue)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:760px){.cols{grid-template-columns:1fr}}
+  .wrap{overflow-x:auto}
+  .q{border-left:3px solid var(--amber);padding-left:12px;margin:10px 0}
+  .q b{color:var(--amber)}
+  .q.open{border-left-color:var(--blue)} .q.open b{color:var(--blue)}
+  .k{color:#fff}
+  .toc{columns:2;column-gap:28px;font-size:12.5px}
+  @media (max-width:760px){.toc{columns:1}}
+  .toc a{color:var(--blue);text-decoration:none}
+
+  /* ---------- layering mock (§5) ---------- */
+  .mock{position:relative;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:hidden;height:340px;font-size:11px;user-select:none}
+  .mock .strip{height:22px;background:#1a1f2b;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 10px;color:var(--dim)}
+  .mock .side{position:absolute;top:22px;left:0;bottom:0;width:150px;background:#12151d;border-right:1px solid var(--line);padding:8px;color:var(--dim)}
+  .mock .side .row{padding:3px 6px;border-radius:3px;margin:2px 0}
+  .mock .side .row.on{background:#1d2230;color:var(--fg)}
+  .mock .stage{position:absolute;top:22px;left:150px;right:0;bottom:0;padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .mock .tile{background:#0f1117;border:1px solid #2f3648;border-radius:6px;position:relative;overflow:hidden}
+  .mock .tile .hd{height:26px;border-bottom:3px solid #1d2230;display:flex;align-items:center;gap:8px;padding:0 8px;color:var(--dim)}
+  .mock .tile .hd b{color:var(--fg);font-weight:500}
+  .mock .tile .body{position:absolute;top:29px;left:0;right:0;bottom:0;padding:8px;color:#4b5563}
+  .mock .tile .body .ln{height:6px;background:#1a1f2b;border-radius:3px;margin:6px 0;width:80%}
+  .mock .tile .body .ln.s{width:55%}
+  .mock .native{position:absolute;border-radius:0 0 6px 6px;background:repeating-linear-gradient(135deg,#1e293b 0 8px,#243044 8px 16px);border:1px dashed var(--blue);color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px;z-index:20;transition:opacity .12s}
+  .mock .native small{display:block;color:var(--dim);margin-top:4px}
+  .mock .native.hidden{opacity:0;pointer-events:none}
+  .mock .palette{position:absolute;left:50%;top:60px;transform:translateX(-50%);width:360px;background:#161a23;border:1px solid var(--green);border-radius:6px;padding:8px;z-index:10;box-shadow:0 12px 40px rgba(0,0,0,.6);display:none}
+  .mock .palette.show{display:block}
+  .mock .palette .in{background:#0f1117;border:1px solid var(--line);border-radius:4px;padding:4px 8px;color:var(--dim)}
+  .mock .palette .it{padding:3px 8px;color:var(--fg)} .mock .palette .it.on{background:#1d2230}
+  .mock .tip{position:absolute;z-index:10;background:#161a23;border:1px solid var(--line);border-radius:4px;padding:3px 7px;color:var(--fg);display:none}
+  .mock .tip.show{display:block}
+  .mock.dom-above .native{z-index:5}
+  .ctl{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .ctl button{font:11px ui-monospace,monospace;padding:3px 9px;border-radius:4px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);cursor:pointer}
+  .ctl button.on{color:var(--green);border-color:var(--green);background:color-mix(in srgb,var(--green) 10%,transparent)}
+  .cap{font-size:11.5px;color:var(--dim);margin-top:6px}
+
+  /* ---------- sequence diagram (§4) ---------- */
+  .seq{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;font-size:12px;margin:12px 0}
+  .seq .col{border:1px solid var(--line);padding:8px;background:var(--bg2)}
+  .seq .col h4{margin:0 0 6px;color:#fff;font-size:12px}
+  .seq .col:first-child{border-radius:6px 0 0 6px}.seq .col:last-child{border-radius:0 6px 6px 0}
+  .seq .col ul{padding-left:16px;margin:0}
+  .arrow{color:var(--amber)}
+</style>
+</head>
+<body>
+<main>
+<h1>Web Tile — a real browser behind the tile</h1>
+<p class="sub">Design study for replacing the web tile's sandboxed iframe with Electron's own Chromium renderer when run-kit is viewed through the desktop shell. Builds on window-views.md / surface-layout.md and the shipped <code>IframeWindow</code>. Written 2026-09-16 in a <code>/fab-discuss</code> session against <code>b020adf9</code>; the execution plan is <code>fab/plans/sahil/26-09-16-web-tile-native-browser.md</code>. Decisions in §14 are proposed, not yet recorded.</p>
+
+<div class="box rec">
+<b class="k">Recommendation in five lines</b>
+<ol>
+  <li><b>It is a second engine, not a replacement.</b> The SPA is served by rk to any browser, PWA and phone, so the iframe stays as the universal engine. The shell gets a <code>native</code> engine behind the <em>same</em> chrome — tab strip, address bar, find bar, error surface — and the chrome stops knowing which engine it drives.</li>
+  <li><b><code>WebContentsView</code>, Electron's recommended API</b>, owned by the main process — the same class the shell already uses for hosts. The <code>&lt;webview&gt;</code> tag would sit in the DOM for free but Electron's docs tell you not to use it; <code>BrowserView</code> is deprecated. Web views hang <em>under the host view</em> as child views so a host switch hides them with their parent.</li>
+  <li><b>The crux is layering, not capability.</b> A native view is always painted above the SPA's DOM, so every fixed overlay — palette, dialogs, quake drawer, toasts, tips, flyouts — needs one "overlay open" signal that hides or clips the web views. That signal does not exist yet and is the first thing to build after the spike.</li>
+  <li><b>Everything the iframe loses cross-origin comes back for every address kind</b>: sites that refuse framing render, logins persist in a partition of their own, back/forward carry a real <code>canGoBack</code>, find has match ordinals, title/favicon/location are events, and the guest gets real DevTools.</li>
+  <li><b>One spike decides the plan.</b> Four questions — child-view hiding on host detach, the overlay hide flash, sash-drag lag, chord forwarding through <code>before-input-event</code> — are answerable in a day on a throwaway branch. If layering proves intolerable, <code>&lt;webview&gt;</code> is the escape hatch, and the spike measures it too.</li>
+</ol>
+</div>
+
+<div class="toc">
+<a href="#today">1. The web tile today</a><br>
+<a href="#options">2. What "a real browser" means in Electron</a><br>
+<a href="#engines">3. Two engines, one chrome</a><br>
+<a href="#arch">4. Architecture of the native engine</a><br>
+<a href="#layering">5. Layering — the crux (live mock)</a><br>
+<a href="#security">6. Security posture</a><br>
+<a href="#keys">7. Keyboard and focus</a><br>
+<a href="#parity">8. Chrome parity, feature by feature</a><br>
+<a href="#address">9. Addressing, proxy and remote hosts</a><br>
+<a href="#budget">10. Process and memory budget</a><br>
+<a href="#testing">11. Testing</a><br>
+<a href="#rejected">12. Alternatives considered</a><br>
+<a href="#phases">13. Change stack</a><br>
+<a href="#decide">14. Decisions (proposed)</a>
+</div>
+
+<h2 id="today">1. The web tile today</h2>
+<p><code>app/frontend/src/components/iframe-window.tsx</code> renders the window's web-tab family as one sandboxed <code>&lt;iframe&gt;</code> per tab (up to eight, hidden but never unmounted — P3). Every browser affordance it offers is built by reaching into the frame's document, so the tile's abilities split sharply on origin:</p>
+<div class="wrap"><table>
+<tr><th>Capability</th><th>Same-origin (present · proxy · relative)</th><th>Cross-origin (external URL)</th></tr>
+<tr><td>Renders at all</td><td class="ok">yes</td><td class="meh">only when the site sends no <code>X-Frame-Options</code> / <code>frame-ancestors</code> — GitHub, Google, most SaaS refuse</td></tr>
+<tr><td>Back / forward</td><td class="meh"><code>contentWindow.history</code>, no canGoBack signal</td><td class="no">buttons hidden</td></tr>
+<tr><td>Reload</td><td class="ok">real <code>location.reload()</code></td><td class="meh">about:blank bounce</td></tr>
+<tr><td>Find in page</td><td class="ok">CSS Custom Highlight API over <code>contentDocument</code></td><td class="no">disabled</td></tr>
+<tr><td>Title · favicon · tracked location</td><td class="ok">read on each <code>load</code></td><td class="no">none — the stored URL drives the label</td></tr>
+<tr><td>Chord reclaim · tile focus</td><td class="ok">capture-phase keydown/pointerdown in the frame</td><td class="meh">window-blur fallback only; ⌘K inside the page is lost</td></tr>
+<tr><td>Zoom</td><td class="ok">CSS scale wrapper + in-frame gestures</td><td class="meh">scale wrapper; gestures unreachable</td></tr>
+<tr><td>Errors</td><td class="ok">dead-port probe (a 502 fetch)</td><td class="ok">backend <code>/api/frame-check</code> reads the refusal headers</td></tr>
+<tr><td>Cookies / logins</td><td colspan="2" class="meh">third-party-context cookies inside an iframe; nothing survives reliably</td></tr>
+</table></div>
+<p>The backend carries the plumbing that makes same-origin possible: the <code>/proxy/{port}</code> reverse proxy with HTML rewriting of localhost references (<code>api/proxy.go</code>), the <code>/present/</code> file server, and the frame-check route (<code>api/framecheck.go</code>). Twelve <code>Web:</code> palette entries and two <code>webOnly</code> chords (⌘F, ⌘L) bind to the tile. About 50 Playwright tests cover it across <code>web-tabs</code>, <code>web-tile-chrome</code>, <code>web-tile-find</code>, <code>web-tile-zoom</code>, <code>web-view-lens</code> and <code>present-viewer</code>.</p>
+<p><b>What already points the right way.</b> <code>WebFrame</code> inside the component reports a <code>FrameChromeState</code> (loading, crossOrigin, trackedLocation, title, favicon, tileError) upward and registers a <code>FrameHandle</code> (refresh, retry, navigate) — the chrome binds to the active frame's entry. That pair is half of an engine contract already; §3 finishes it.</p>
+
+<h2 id="options">2. What "a real browser" means in Electron</h2>
+<p>The desktop shell (<code>app/desktop</code>, Electron 43) is a viewer: one persistent <code>WebContentsView</code> per (window, host) over the full window bounds, hardened <code>webPreferences</code> (sandbox, contextIsolation, no nodeIntegration), a sandboxed preload exposing the additive <code>runkitShell</code> bridge, sender-frame-gated IPC, an all-external window-open policy and a navigation allowlist. Electron gives three ways to embed a second Chromium renderer:</p>
+<div class="wrap"><table>
+<tr><th></th><th><code>&lt;webview&gt;</code> tag</th><th><code>BrowserView</code></th><th><code>WebContentsView</code> <span class="tag rec">recommended</span></th></tr>
+<tr><td>Status</td><td class="meh">exists, disabled by default; docs: "we currently recommend to not use the webview tag" — instability in rendering, navigation and event routing</td><td class="no">deprecated in favor of WebContentsView</td><td class="ok">current API; what the shell already uses for hosts</td></tr>
+<tr><td>Where it paints</td><td class="ok">a DOM element (out-of-process iframe in shadow DOM) — participates in layout and z-order</td><td class="no">native, above the DOM</td><td class="no">native, always above the host page's DOM</td></tr>
+<tr><td>Who owns it</td><td>the renderer (the SPA)</td><td>main</td><td>main — driven over IPC</td></tr>
+<tr><td>Browser API</td><td class="ok">findInPage, zoom, goBack, title/favicon events</td><td class="ok">full webContents</td><td class="ok">full webContents: navigationHistory, findInPage + ordinals, setZoomFactor, page-title/favicon-updated, did-navigate, did-fail-load, before-input-event, capturePage, openDevTools; <code>setBorderRadius</code> on the view</td></tr>
+<tr><td>Hardening cost</td><td class="meh">requires <code>webviewTag: true</code> in the host view's webPreferences; focus isolation quirks</td><td>—</td><td class="ok">none on the host; the guest gets its own webPreferences and partition</td></tr>
+<tr><td>Child views</td><td>—</td><td class="no">flat</td><td class="ok"><code>View.addChildView</code> — a web view can hang under its host view</td></tr>
+</table></div>
+<div class="box"><b class="k">Recommend <code>WebContentsView</code>.</b> It is the path Electron maintains, it matches the shell's existing view model, and hanging web views under the host view makes host switching and window teardown free. The price is §5 — layering. <code>&lt;webview&gt;</code> would make §5 disappear, and that is exactly why the spike measures it alongside: if the layering rules turn out to be unworkable, the tag is the fallback despite the warning, taken knowingly.</div>
+
+<h2 id="engines">3. Two engines, one chrome</h2>
+<p>The single structural fact: the iframe cannot go away. The SPA is served to Safari on a phone, to Chrome as a PWA, to a colleague's browser over a tunnel. So the tile grows an engine seam and the chrome becomes engine-blind.</p>
+<pre>// lib/web-frame-engine.ts — the contract both engines implement
+interface WebFrameEngine {
+  kind: "iframe" | "native";
+  supports: { history: boolean; find: boolean; meta: boolean; zoomGestures: boolean; devtools: boolean };
+  // commands (the FrameHandle of today, widened)
+  load(url: string): void;  reload(): void;  retry(): void;
+  back(): void;  forward(): void;
+  find(query: string, opts: { forward: boolean; next: boolean }): void;  stopFind(): void;
+  setZoom(factor: number): void;
+  openDevTools?(): void;
+  // state (the FrameChromeState of today, widened)
+  onState(cb: (s: FrameChromeState & { canGoBack: boolean; canGoForward: boolean;
+                                      find?: { active: number; total: number } }) => void): () => void;
+  onInteract(cb: () => void): () => void;
+  onChord(cb: (e: ChordEvent) => void): () => void;
+}</pre>
+<div class="wrap"><table>
+<tr><th>Surface</th><th>Engine</th><th>Why</th></tr>
+<tr><td>Desktop shell (current version)</td><td class="ok"><code>native</code></td><td><code>runkitShell.web</code> present — the additive-group detection every sibling uses</td></tr>
+<tr><td>Desktop shell (older)</td><td><code>iframe</code></td><td>no <code>web</code> group ⇒ today's engine, unchanged</td></tr>
+<tr><td>Any browser · PWA · mobile</td><td><code>iframe</code></td><td>no shell</td></tr>
+<tr><td>Shell, per-viewer opt-out</td><td><code>iframe</code></td><td>a palette toggle stored in localStorage (Constitution IV per-viewer state) — the escape hatch while the native engine matures</td></tr>
+</table></div>
+<p>The chrome renders per <code>supports.*</code>, never per <code>crossOrigin</code>: back/forward hide when history is unsupported, find disables when find is unsupported. On the iframe engine those flags are derived from the same-origin probe exactly as today, so the refactor is behavior-preserving and the ~50 e2e tests are its gate.</p>
+
+<h2 id="arch">4. Architecture of the native engine</h2>
+<div class="seq">
+<div class="col"><h4>SPA · <code>WebFrameNative</code></h4><ul>
+<li>measures the tile content rect (ResizeObserver + layout/ratio/zoom/sidebar changes)</li>
+<li>sends <code>web:create</code> · <code>web:bounds</code> · <code>web:visible</code> · commands</li>
+<li>subscribes to <code>web:event</code>, feeds <code>FrameChromeState</code></li>
+<li>hides views while <code>overlayPresence.count &gt; 0</code> (§5)</li>
+<li>sends the reclaim chord table once per view (§7)</li></ul></div>
+<div class="col"><h4>preload · <code>runkitShell.web</code></h4><ul>
+<li>thin invokers, one <code>onEvent</code> subscription</li>
+<li>additive group — <code>canShellWeb()</code> narrows it like <code>servers.addDirect</code></li>
+<li>exposed everywhere, privileged only for registered-host senders (main-side gate)</li></ul></div>
+<div class="col"><h4>main · <code>web-views.ts</code> + glue</h4><ul>
+<li>pure registry keyed (windowId, hostId, tabKey) — the <code>views.ts</code> pattern, <code>node --test</code></li>
+<li>creates a <code>WebContentsView</code> in the <code>persist:rk-web</code> partition, adds it as a <b>child of the host view</b></li>
+<li>relays webContents events → <code>web:event</code></li>
+<li>destroys with the host view; hides on host detach</li></ul></div>
+</div>
+<h3>The bridge group</h3>
+<div class="wrap"><table>
+<tr><th>Channel</th><th>Payload</th><th>Note</th></tr>
+<tr><td><code>web:create</code></td><td><code>{tabKey, url}</code></td><td>tabKey is scoped to the sender webContents — two windows showing one host never collide</td></tr>
+<tr><td><code>web:destroy</code></td><td><code>{tabKey}</code></td><td>tile unmount / tab close</td></tr>
+<tr><td><code>web:bounds</code></td><td><code>{tabKey, x, y, w, h}</code></td><td>DIP coordinates relative to the host view — Electron handles DPR</td></tr>
+<tr><td><code>web:visible</code></td><td><code>{tabKey, visible}</code></td><td>inactive tabs, overlay presence, sash drag</td></tr>
+<tr><td><code>web:load</code> · <code>reload</code> · <code>back</code> · <code>forward</code> · <code>zoom</code> · <code>find</code> · <code>stop-find</code> · <code>devtools</code></td><td>per command</td><td>one handler each, validated payloads (the <code>parse*Payload</code> precedent)</td></tr>
+<tr><td><code>web:chords</code></td><td><code>[{code, ctrl, meta, shift, alt}]</code></td><td>the reclaim table main matches in <code>before-input-event</code></td></tr>
+<tr><td><code>web:event</code> <span class="arrow">←</span></td><td><code>{tabKey, kind: title|favicon|url|loading|failed|history|found|focus|chord|popup, …}</code></td><td>one main→renderer channel; the SPA demuxes by tabKey</td></tr>
+</table></div>
+<h3>Lifecycle</h3>
+<ul>
+<li><b>Create</b> lazily when a tab is first active (not on family load — eight renderers for eight stored tabs is the wrong default). Hidden tabs stay created once visited, mirroring P3.</li>
+<li><b>Host detach</b> (a host switch) removes the host view from the window; child web views go with it. <b>Verify in the spike</b> that a detached parent hides its children — if not, the registry hides them explicitly on the switch seam.</li>
+<li><b>Host view navigates or reloads</b> (an <code>rk update</code>, a route reload): the renderer that owned the tabKeys is gone. Main tears down that host view's web views on <code>did-navigate</code> of the host webContents; the fresh SPA re-creates what it mounts.</li>
+<li><b>Window close / host removed</b>: destroyed with the host view — nothing new to track.</li>
+</ul>
+
+<h2 id="layering">5. Layering — the crux <small>live mock</small></h2>
+<p>A <code>WebContentsView</code> is composited above the host page. Nothing the SPA draws can appear over it: not the ⌘K palette, not a dialog, not the quake drawer, not a toast, not a <code>Tip</code>, not a sidebar flyout card, not the screen-break egg. The SPA currently has 21 components using <code>z-50</code> or <code>z-[60]</code> and no central notion of "an overlay is open" — dialog state is spread across <code>useDialogState</code>, <code>useSettingsDialog</code>, <code>useServerDialogs</code>, the palette, the quake terminal and the toast stack.</p>
+<div class="ctl">
+  <button id="bPal">Open palette</button>
+  <button id="bTip">Hover a header verb (tip)</button>
+  <button id="bHide" class="on">Rule: hide while a modal overlay is open</button>
+  <button id="bDom">Pretend the view were DOM (webview)</button>
+</div>
+<div class="mock" id="mock">
+  <div class="strip">HexoKit · sahil@vm · web</div>
+  <div class="side"><div class="row">fabKit</div><div class="row on">▸ able-sturgeon</div><div class="row">▸ quake-terminal</div><div class="row">▸ gui-surface</div></div>
+  <div class="stage">
+    <div class="tile"><div class="hd">&gt;_ <b>tty</b></div><div class="body"><div class="ln"></div><div class="ln s"></div><div class="ln"></div><div class="ln s"></div></div></div>
+    <div class="tile" id="webTile"><div class="hd">:// <b>web</b> <span style="margin-left:auto">github.com</span> <span id="verb" style="border:1px solid #2f3648;border-radius:3px;padding:0 4px">⤢</span></div>
+      <div class="body"></div>
+    </div>
+  </div>
+  <div class="native" id="native">WebContentsView<small>native · painted above the DOM · rounded via setBorderRadius</small></div>
+  <div class="palette" id="pal"><div class="in">&gt; web</div><div class="it on">Web: Find in page</div><div class="it">Web: Focus address bar</div><div class="it">Web: Open in browser</div><div class="it">Web: Inspect page (DevTools)</div></div>
+  <div class="tip" id="tip">Expand tile</div>
+</div>
+<p class="cap">The dashed block is the native view. Open the palette: with the rule off, the palette's right half is swallowed; with the rule on, the web content blinks out while the palette is open. The tip over the tile's own header verb intersects the content rect by a few pixels — that class clips the intersected band instead of hiding the view. The last button shows what a DOM-resident <code>&lt;webview&gt;</code> would give for free.</p>
+<h3>The rule set</h3>
+<div class="wrap"><table>
+<tr><th>Overlay class</th><th>Examples</th><th>Native-view treatment</th></tr>
+<tr><td><b>Modal / focus-taking</b></td><td>command palette, every dialog (<code>dialog.tsx</code> consumers), settings panel, quake drawer, screen-break egg, mobile sidebar drawer</td><td class="ok"><code>setVisible(false)</code> while open — content blinks out, chrome stays. Accepted: these already take focus and cover the stage.</td></tr>
+<tr><td><b>Transient, edge-overlapping</b></td><td><code>Tip</code>, sidebar row flyout card, marker pad, swatch / theme popovers, pin popover, compose-history flyout</td><td class="meh">no hide; the SPA <b>clips</b> the view instead — the visible rect is the tile rect minus the overlay's rect only when they intersect, or the overlay is simply allowed to render clipped. Tips over the tile's own header never intersect the content rect at all.</td></tr>
+<tr><td><b>Corner-anchored</b></td><td>toasts</td><td class="meh">position them over chrome (status bar / top bar), never over the stage — a one-line placement change</td></tr>
+<tr><td><b>Sash drag</b></td><td>ratio drag, intersection drag</td><td class="ok">hide during the drag (today's <code>pointer-events: none</code> precedent), show on release with the final bounds</td></tr>
+</table></div>
+<div class="box"><b class="k">What has to exist first: an overlay-presence registry.</b> <code>lib/overlay-presence.ts</code> — a tiny module counting mounted occluding overlays, a <code>useOccludes(kind)</code> hook each modal-class component calls while open, and a subscription the native engine reads. Pure SPA work, unit-testable, and it lands <em>before</em> the native engine so the engine ships with the rule from day one. It has no effect on the iframe engine.</div>
+
+<h2 id="security">6. Security posture</h2>
+<p>The guest is untrusted web. Today the iframe sandbox and the browser's origin model contain it. In the shell the containment moves to Electron's session and webPreferences:</p>
+<div class="wrap"><table>
+<tr><th>Concern</th><th>iframe engine today</th><th>native engine</th></tr>
+<tr><td>Bridge exposure</td><td>none — the iframe never sees <code>runkitShell</code> (sandboxed preload runs in the host frame only… and cross-origin frames get nothing)</td><td class="ok"><b>no preload at all</b> in guest views; <code>sandbox: true</code>, <code>contextIsolation: true</code>, <code>nodeIntegration: false</code>, <code>webSecurity: true</code></td></tr>
+<tr><td>Cookies / storage</td><td>third-party context, browser-policed</td><td class="ok">a dedicated <code>session.fromPartition("persist:rk-web")</code> — separate from the default session the SPA runs in; external logins persist like a browser profile and never share a jar with rk</td></tr>
+<tr><td>Navigation</td><td>free within the frame; top-level escape blocked by sandbox</td><td class="ok">the guest may navigate anywhere http(s) — it is a browser — but the app-level <code>will-navigate</code> guard must <b>exempt registry members</b> from the host allowlist and apply a scheme allowlist (http/https only) instead</td></tr>
+<tr><td>Popups</td><td><code>allow-popups</code> → new browser tab</td><td class="ok"><code>setWindowOpenHandler</code>: v1 opens externally (the shipped policy); v2 emits <code>popup</code> so the SPA adds a web tab via the add verb</td></tr>
+<tr><td>Permissions</td><td>browser prompts</td><td class="ok">partition-scoped <code>setPermissionRequestHandler</code> — deny by default; clipboard-read/write only if a real need appears</td></tr>
+<tr><td>Downloads</td><td><code>allow-downloads</code></td><td class="ok"><code>session.on("will-download")</code> — Electron's default save behavior into Downloads</td></tr>
+<tr><td>TLS</td><td>browser</td><td class="ok">no <code>certificate-error</code> handler, fail closed — unchanged</td></tr>
+<tr><td>IPC</td><td>—</td><td class="ok">every <code>web:*</code> handler gated on the sender being a registered-host view (the <code>servers:*</code> gate) and on tabKey membership under that sender</td></tr>
+</table></div>
+
+<h2 id="keys">7. Keyboard and focus</h2>
+<p>With focus inside a native view the SPA's keybinding dispatcher sees nothing — no capture-phase listener can reach a separate renderer. The iframe engine's chord-reclaim seam (capture keydown in the frame → <code>preventDefault</code> → synthetic bubbling <code>KeyboardEvent</code> on the parent document) has an exact analog:</p>
+<ol>
+<li>The SPA resolves its reclaim predicate for the <code>web</code> kind into a static table of <code>{code, ctrl, meta, shift, alt}</code> and sends it once per view (<code>web:chords</code>). The table is small: the registry chords the web tile reclaims today plus ⌘K and Escape.</li>
+<li>Main listens on the guest's <code>before-input-event</code>; a <code>keyDown</code> matching the table is <code>preventDefault()</code>ed and relayed as <code>web:event {kind:"chord"}</code>.</li>
+<li>The engine's <code>onChord</code> re-dispatches a synthetic <code>KeyboardEvent</code> on <code>document</code> — byte-identical to today's reclaim, so the palette listener and the window-level dispatcher see the same event they see now.</li>
+</ol>
+<p><b>Tile focus.</b> The guest's <code>focus</code> event replaces the contentDocument pointerdown + window-blur fallback for <code>onInteract</code>; the focus-memory rules (focus-ownership.md) are untouched because the seam is the same callback. <b>Escape</b> from inside the guest returns focus to the SPA (<code>hostView.webContents.focus()</code>) — the same intent as the code tile's focus hop.</p>
+
+<h2 id="parity">8. Chrome parity, feature by feature</h2>
+<div class="wrap"><table>
+<tr><th>Chrome feature</th><th>iframe engine</th><th>native engine</th><th>Δ</th></tr>
+<tr><td>Back / forward</td><td>same-origin <code>history</code>, no signal</td><td><code>navigationHistory.goBack/goForward</code>; <code>canGoBack/canGoForward</code> pushed on every <code>did-navigate</code></td><td class="ok">works on every kind; buttons finally disable at the boundary</td></tr>
+<tr><td>Reload</td><td>reload or bounce</td><td><code>reload()</code>; retry = <code>reloadIgnoringCache()</code></td><td class="ok">uniform</td></tr>
+<tr><td>Address bar tracked location</td><td>same-origin only</td><td><code>did-navigate</code> / <code>did-navigate-in-page</code> URL, re-expressed root-relative when it is under the host origin</td><td class="ok">every kind</td></tr>
+<tr><td>Title · favicon</td><td>same-origin only</td><td><code>page-title-updated</code> · <code>page-favicon-updated</code></td><td class="ok">every kind</td></tr>
+<tr><td>Find</td><td>CSS Highlight engine, "N of M" from a TreeWalker</td><td><code>findInPage</code> + <code>found-in-page</code> (<code>activeMatchOrdinal</code>, <code>matches</code>); <code>stopFindInPage("clearSelection")</code> on close</td><td class="ok">the shared <code>FindBar</code> UI is unchanged — only the engine behind it</td></tr>
+<tr><td>Zoom</td><td>scale wrapper + gestures</td><td><code>setZoomFactor</code>; gestures handled by Chromium inside the guest; <code>zoom-changed</code> reports wheel zoom back</td><td class="meh">the scale wrapper goes away; <b>source of truth to settle in the spike</b>: Chromium persists zoom per origin inside the partition and will fight the SPA's localStorage buckets unless the factor is re-applied on <code>did-navigate</code></td></tr>
+<tr><td>Loading line</td><td>set on mount, cleared on <code>load</code></td><td><code>did-start-loading</code> / <code>did-stop-loading</code></td><td class="ok">—</td></tr>
+<tr><td>Error states</td><td>frame-check probe · 502 probe</td><td><code>did-fail-load</code> with Chromium's error code: connection refused ⇒ dead-port copy; name not resolved / timeout ⇒ unreachable copy</td><td class="ok">the <b>frame-refusal state disappears</b> — nothing refuses framing any more; <code>/api/frame-check</code> stays for the iframe engine</td></tr>
+<tr><td>Open in browser</td><td><code>window.open</code> → shell opens externally</td><td>same, via the tracked URL</td><td>—</td></tr>
+<tr><td>Inspect page</td><td>—</td><td><code>openDevTools({mode:"detach"})</code></td><td class="ok"><b>new</b> palette entry <code>Web: Inspect page</code> (shell-gated like the Server: Switch entries) — real DevTools on an agent-built UI</td></tr>
+<tr><td>Screenshot</td><td>—</td><td><code>capturePage()</code></td><td class="tag park">parked — a later agent verb, not v1</td></tr>
+<tr><td>Onboarding · tab strip · drafts · add/select/move/close</td><td colspan="2">chrome-level, engine-blind</td><td>—</td></tr>
+</table></div>
+
+<h2 id="address">9. Addressing, proxy and remote hosts</h2>
+<p>Stored <code>@rk_win_web_&lt;n&gt;</code> values are what they are: <code>/present/…</code> and <code>/proxy/{port}/…</code> root-relative paths, other relative paths, and absolute external URLs. The simplest correct rule for the native engine is <b>load exactly what the iframe loads, made absolute against the host origin</b>: <code>new URL(toProxySrc(url), hostOrigin)</code>.</p>
+<ul>
+<li>Present pages and relative addresses keep resolving against the rk host — same as any viewer.</li>
+<li>Proxied ports keep riding <code>/proxy/{port}</code> — which is <em>required</em> for SSH remote hosts, where the proxy is the tunnel. Loading <code>localhost:3000</code> directly would hit the viewer's machine, not the host's.</li>
+<li>External URLs load directly. No frame-check, no HTML rewriting, real cookies.</li>
+</ul>
+<div class="box"><b class="k">Optional later rung — direct localhost for local hosts.</b> When the host origin is loopback (the shell already knows via <code>isLoopbackOrigin</code>), a proxy-kind address could load <code>http://localhost:{port}</code> directly and skip the HTML-rewriting proxy entirely, which fixes every site the regex rewrite mangles. Cheap once the engine exists; not v1.</div>
+
+<h2 id="budget">10. Process and memory budget</h2>
+<p>Each native view is a renderer process. Eight tabs per window across several windows adds up in a way eight iframes in one renderer did not.</p>
+<ul>
+<li><b>Lazy creation</b> — a view exists only for a tab that has been active at least once (§4).</li>
+<li><b>Hidden means throttled</b> — <code>setVisible(false)</code> lets Chromium mark the contents hidden and throttle timers/rAF; no extra work.</li>
+<li><b>No cap in v1</b> — measure real numbers in the spike (a blank page vs GitHub vs a Vite dev server) and record them here. A warm cap with reload-on-reactivate is the obvious knob if needed.</li>
+<li>Terminal relay streams are unaffected — they belong to the host view, whose visibility rules are unchanged.</li>
+</ul>
+
+<h2 id="testing">11. Testing</h2>
+<div class="wrap"><table>
+<tr><th>Layer</th><th>Lane</th><th>Covers</th></tr>
+<tr><td>Engine seam refactor</td><td>existing Playwright e2e (~50 web tests) + Vitest</td><td>behavior preservation of the iframe engine — the gate for change 1</td></tr>
+<tr><td>Overlay presence</td><td>Vitest</td><td>count/subscription semantics; each modal-class overlay registers while open</td></tr>
+<tr><td>Main-side registry · bounds math · chord matching</td><td><code>node --test</code> (electron-free modules)</td><td>the <code>views.ts</code> / <code>window-open.ts</code> precedent</td></tr>
+<tr><td>Native engine end to end</td><td class="meh"><b>new</b>: Playwright's <code>_electron.launch</code> against <code>RK_DESKTOP_URL</code> pointing at the e2e rig; <code>just test-desktop-e2e</code>; a CI job under <code>xvfb-run</code></td><td>a view is created for the active tab; its <code>getBounds()</code> (read via <code>app.evaluate</code> in main) matches the tile rect; opening the palette hides it; a title event lands in the tab strip; a reclaimed chord opens the palette from inside the guest</td></tr>
+</table></div>
+<p>The SPA's Playwright suite cannot see native views — it drives a browser, not the shell. That is fine: the chrome is engine-blind and stays covered by the iframe lane; the native lane needs only a handful of smoke tests because the engine's logic lives in the tested pure modules. There is no Electron test lane today (<code>ci.yml</code>: backend, frontend, code-bridge, four e2e shards), so this is a real CI addition, not a tweak.</p>
+
+<h2 id="rejected">12. Alternatives considered</h2>
+<div class="cols">
+<div class="box bad"><b class="k">Strip <code>X-Frame-Options</code> in a backend proxy for external URLs</b>
+<p>A <code>/proxy-external?url=</code> route that fetches the site and deletes the refusal headers would make refusing sites render in the iframe with no Electron work.</p>
+<ul><li>Cookies land at the rk origin: no logins, and a cross-site cookie jar under rk's name.</li><li>CSP, relative URLs, service workers and WebSockets break; the HTML-rewrite regex becomes a general-purpose proxy rewriter.</li><li>An open proxy on the daemon — Constitution I would need an allowlist it cannot express.</li></ul>
+<p><span class="tag bad">rejected</span></p></div>
+<div class="box bad"><b class="k">Replace the iframe outright</b>
+<p>Cut the iframe engine and require the shell for web tiles.</p>
+<ul><li>Breaks every browser, PWA and phone viewer — the product is served by rk to all of them.</li><li>Removes the tutorial companion page and presented files from non-shell viewers.</li></ul>
+<p><span class="tag bad">rejected</span></p></div>
+<div class="box warn"><b class="k"><code>&lt;webview&gt;</code> as the engine</b>
+<p>DOM-resident, so §5 vanishes; the swap is one component.</p>
+<ul><li>Electron's docs recommend against it; it is disabled by default and needs <code>webviewTag: true</code> on the hardened host view.</li><li>Focus isolation quirks; no child-view lifecycle.</li></ul>
+<p><span class="tag park">spike fallback</span> — measured in change 0; adopted only if layering fails.</p></div>
+<div class="box bad"><b class="k"><code>BrowserView</code></b>
+<p>Deprecated in favor of <code>WebContentsView</code>; no child views.</p>
+<p><span class="tag bad">rejected</span></p></div>
+</div>
+<p>Also parked: applying the same engine to the <code>code</code> lens (code-server in an iframe has the same shape — chord reclaim, focus grab — but a different problem set: the workbench wants same-origin for its service worker and the folder-follow seam reads the frame's URL). The engine seam should not assume the web kind, and that is all this plan commits to.</p>
+
+<h2 id="phases">13. Change stack <small>each row = one fab change / PR; detail in the plan file</small></h2>
+<div class="wrap"><table>
+<tr><th>#</th><th>Change</th><th>Repo area</th><th>Lane</th><th>Gate</th></tr>
+<tr><td>0</td><td><b>Spike</b> — a <code>WebContentsView</code> under the host view, positioned over a tile; palette hide; sash drag; chord forwarding; child hide on host detach; memory per view; a <code>&lt;webview&gt;</code> twin for comparison. Throwaway branch; the verdict is written into §14.</td><td>desktop + a hard-coded SPA hook</td><td>—</td><td>the six spike questions answered</td></tr>
+<tr><td>1</td><td><b>Engine seam</b> — <code>lib/web-frame-engine.ts</code>, today's <code>WebFrame</code> becomes <code>WebFrameIframe</code>, chrome renders per <code>supports.*</code>. No behavior change.</td><td>frontend</td><td>full</td><td>tsc · <code>just test-frontend</code> · the web-* and present-viewer e2e specs</td></tr>
+<tr><td>2</td><td><b>Overlay presence</b> — <code>lib/overlay-presence.ts</code> + <code>useOccludes</code> in every modal-class overlay; toasts move over chrome.</td><td>frontend</td><td>light</td><td>Vitest; palette/dialog e2e unchanged</td></tr>
+<tr><td>3</td><td><b>Shell web views</b> — <code>web-views.ts</code> registry + tests, <code>runkitShell.web</code> group, main handlers + event relay, partition + guest hardening, lifecycle under the host view; <code>WebFrameNative</code> with load/bounds/visible/reload/title/url/loading/failed; per-viewer opt-out toggle.</td><td>desktop + frontend</td><td>full</td><td>node --test · tsc · manual shell run against the rig</td></tr>
+<tr><td>4</td><td><b>Parity</b> — history with canGoBack, find via findInPage, zoom via setZoomFactor (drop the wrapper on this engine), chord table + <code>before-input-event</code>, focus/Escape, error-code mapping, downloads, popups-external, <code>Web: Inspect page</code>.</td><td>desktop + frontend</td><td>full</td><td>node --test for the chord matcher and error mapping · manual matrix over the four address kinds</td></tr>
+<tr><td>5</td><td><b>Desktop e2e lane + docs</b> — <code>just test-desktop-e2e</code>, the CI job, the smoke set from §11; window-views.md / surface-layout.md / right-panel.md rows, desktop-shell.md and lenses-and-layout.md hydration.</td><td>desktop · CI · docs</td><td>full</td><td>the new lane green in CI</td></tr>
+</table></div>
+<p>Topology: <b>0 → 1 → {2 ∥ 3-desktop} → 3-frontend → 4 → 5</b>. Change 2 and the desktop half of 3 are file-disjoint and can run in parallel from their own worktrees; 3's frontend engine needs both. Each change is its own fab change and draft PR off fresh <code>origin/main</code>, never stacked.</p>
+
+<h2 id="decide">14. Decisions <small>proposed 2026-09-16 — confirm or amend before change 1</small></h2>
+<div class="q"><b>Engine model.</b> Two engines behind one engine-blind chrome; the iframe engine is never removed. Native is the default in a shell that carries the <code>web</code> bridge group; a per-viewer palette toggle opts a viewer back to the iframe.</div>
+<div class="q"><b>API.</b> <code>WebContentsView</code> as a child of the host view. <code>&lt;webview&gt;</code> only if the spike's layering verdict is negative.</div>
+<div class="q"><b>Layering rule.</b> Modal-class overlays hide the web views; transient edge overlays clip; toasts move over chrome; sash drags hide. One overlay-presence registry in the SPA, built before the engine.</div>
+<div class="q"><b>Containment.</b> Guests get no preload, a dedicated persistent partition, http(s)-only navigation, deny-by-default permissions, external popups in v1.</div>
+<div class="q"><b>Addressing.</b> The native engine loads what the iframe loads, made absolute against the host origin. The proxy stays the path for ports (it is the tunnel for remote hosts). Direct localhost for local hosts is a later rung.</div>
+<div class="q open"><b>Open — zoom source of truth.</b> SPA localStorage buckets (parity across engines) vs Chromium's per-origin zoom inside the partition. Proposed: SPA owns it and re-applies on <code>did-navigate</code>; the spike confirms the two do not fight.</div>
+<div class="q open"><b>Open — child hiding on host detach.</b> Whether <code>removeChildView(hostView)</code> hides the host view's children or leaves them painted over the incoming host. Day-one spike question; the registry hides explicitly if needed.</div>
+<div class="q open"><b>Open — the hide flash.</b> Whether web content blinking out while the palette is open reads as acceptable. The mock in §5 is the proxy for that judgment; the spike shows the real thing.</div>
+<p class="sub" style="margin-top:36px">Sources checked: Electron docs for <code>&lt;webview&gt;</code> (the do-not-use recommendation, <code>webviewTag</code> default off, OOPIF-in-shadow-DOM rendering, focus isolation), <code>WebContentsView</code> / <code>View</code> (<code>addChildView</code>, <code>setBounds</code>, <code>setVisible</code>, <code>setBorderRadius</code>), <code>webContents</code> (findInPage/found-in-page, setZoomFactor/zoom-changed, navigationHistory, page-title/favicon-updated, before-input-event, capturePage, openDevTools); <code>app/desktop/src/main.ts</code> (host view lifecycle, <code>web-contents-created</code> guard, permission handler), <code>views.ts</code>, <code>preload.ts</code>, <code>window-open.ts</code>; <code>app/frontend/src/components/iframe-window.tsx</code>, <code>surface-layout.tsx</code>, <code>lib/web-url.ts</code>, <code>lib/web-zoom.ts</code>, <code>lib/find-in-page.ts</code>, <code>lib/keybindings.ts</code>, <code>lib/shell.ts</code>; <code>app/backend/api/proxy.go</code>, <code>framecheck.go</code>, <code>router.go</code>; memory desktop-shell.md, ui/lenses-and-layout.md, ui/focus-ownership.md, ui/keyboard-and-palette.md; specs window-views.md, surface-layout.md, right-panel.md; <code>.github/workflows/ci.yml</code>.</p>
+</main>
+<script>
+(function(){
+  var mock=document.getElementById('mock'), nat=document.getElementById('native'), pal=document.getElementById('pal'), tip=document.getElementById('tip');
+  var bPal=document.getElementById('bPal'), bTip=document.getElementById('bTip'), bHide=document.getElementById('bHide'), bDom=document.getElementById('bDom');
+  var tile=document.getElementById('webTile'), verb=document.getElementById('verb');
+  var palOpen=false, tipOpen=false, hideRule=true, dom=false;
+  function layout(){
+    // the native view sits over the tile's content rect: below the 29px header
+    var r=tile.getBoundingClientRect(), m=mock.getBoundingClientRect();
+    nat.style.left=(r.left-m.left+1)+'px'; nat.style.top=(r.top-m.top+29)+'px';
+    nat.style.width=(r.width-2)+'px'; nat.style.height=(r.height-30)+'px';
+    // tip anchored under the header verb — overlaps the content rect by design
+    var v=verb.getBoundingClientRect();
+    tip.style.left=(v.left-m.left-20)+'px'; tip.style.top=(v.bottom-m.top+4)+'px';
+  }
+  function render(){
+    pal.classList.toggle('show',palOpen); tip.classList.toggle('show',tipOpen);
+    var modalOpen=palOpen; // tips are the transient class: never hide
+    nat.classList.toggle('hidden', !dom && hideRule && modalOpen);
+    // transient class: clip the band the tip intersects instead of hiding
+    if(!dom && tipOpen){ var tb=tip.getBoundingClientRect(), nb=nat.getBoundingClientRect(); nat.style.clipPath='inset('+Math.max(0,tb.bottom-nb.top+2)+'px 0 0 0)'; } else { nat.style.clipPath=''; }
+    mock.classList.toggle('dom-above',dom);
+    nat.firstChild.nodeValue = dom ? '<webview> (DOM element)' : 'WebContentsView';
+    nat.querySelector('small').textContent = dom ? 'in the DOM · z-order and overlays for free · Electron says do not use it' : 'native · painted above the DOM · rounded via setBorderRadius';
+    bPal.classList.toggle('on',palOpen); bTip.classList.toggle('on',tipOpen); bHide.classList.toggle('on',hideRule); bDom.classList.toggle('on',dom);
+    bPal.textContent=palOpen?'Close palette':'Open palette';
+  }
+  bPal.onclick=function(){palOpen=!palOpen;render();};
+  bTip.onclick=function(){tipOpen=!tipOpen;render();};
+  bHide.onclick=function(){hideRule=!hideRule;render();};
+  bDom.onclick=function(){dom=!dom;render();};
+  window.addEventListener('resize',layout); layout(); render();
+})();
+</script>
+</body>
+</html>
