@@ -227,19 +227,27 @@ if [ "$E2E_WORKERS" -eq 1 ]; then
   RIG_STATE+=("$E2E_STATE_HOME")
 else
   for (( i=0; i<E2E_WORKERS; i++ )); do
-    _rig_port=$(( E2E_PORT + 3 * i ))
-    if [ $(( _rig_port + 2 )) -gt 3699 ]; then
-      echo "ERROR: rig $i's port triple (:$_rig_port) leaves the e2e block (3400-3699); lower RK_E2E_WORKERS or set RK_E2E_PORT." >&2
-      exit 1
+    # Rig i takes the i-th triple after the derived one, WRAPPING inside the
+    # 100-triple 3400–3699 block so a worktree that hashes to the last triple
+    # still gets a valid rig 1 (3697 → 3400), rather than falling off the end.
+    # A preset RK_E2E_PORT outside (or misaligned inside) the block is the
+    # caller's range: plain +3 per rig there.
+    if [ "$i" -eq 0 ]; then
+      _rig_port="$E2E_PORT"
+    elif [ "$E2E_PORT" -ge 3400 ] && [ "$E2E_PORT" -le 3697 ] && [ $(( (E2E_PORT - 3400) % 3 )) -eq 0 ]; then
+      _rig_port=$(( 3400 + ( ( (E2E_PORT - 3400) / 3 + i ) % 100 ) * 3 ))
+    else
+      _rig_port=$(( E2E_PORT + 3 * i ))
     fi
     if [ "$i" -gt 0 ]; then
-      # Rig 0's triple was reclaimed and stepped above; the extra triples are
-      # claimed here the same self-scoped way but never stepped — a busy one
-      # is a foreign owner and the lane is CI-only, so fail loud instead.
-      kill_triple "$_rig_port"
-      sleep 1
+      # Rig 0's triple was reclaimed above because it is this worktree's by
+      # construction. The extra triples are NOT: in the 3400–3699 block they
+      # are other worktrees' derived triples, so nothing here may kill a
+      # listener on them — a busy extra triple is a foreign owner (or a
+      # sibling's live rig) and the run fails loud instead. On CI (one
+      # worktree per VM) they are always free.
       if triple_busy "$_rig_port"; then
-        echo "ERROR: rig $i's port triple (:$_rig_port) is held by an unkillable owner; the multi-rig lane needs RK_E2E_WORKERS consecutive free triples." >&2
+        echo "ERROR: rig $i's port triple (:$_rig_port) is already in use; the multi-rig lane needs RK_E2E_WORKERS consecutive free triples and never kills a listener outside its own derived triple. Use RK_E2E_WORKERS=1 on a shared dev box." >&2
         exit 1
       fi
     fi
