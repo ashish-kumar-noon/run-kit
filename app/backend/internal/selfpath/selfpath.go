@@ -4,18 +4,29 @@
 // share these so the brew-install detection cannot drift between the two entry
 // points into the same self-upgrade behavior.
 //
-// Two resolvers, two audiences. Resolve names the binary that is actually
+// Three resolvers, three audiences. Resolve names the binary that is actually
 // running — the input brew detection needs (the Cellar marker) and the path the
 // daemon's own respawn wants. Stable names the path that survives a
-// `brew upgrade`: on a Homebrew install the old keg is deleted, so any process
-// spawned to outlive this binary's version (a tmux session's argv, an RK_BIN
-// env element, a shell chain) must carry the brew-prefix symlink instead.
+// `brew upgrade` as a whole: on a Homebrew install the old keg is deleted, so
+// any process spawned to outlive this binary's version (a tmux session's argv,
+// an RK_BIN env element, a shell chain) must carry the brew-prefix symlink
+// instead. Launcher names the rk-owned symlink in the per-machine launcher
+// directory; its target is the Cellar binary, which Homebrew deletes only in
+// cleanup, AFTER the new keg is linked — so the launcher is live exactly during
+// the unlink→install→link window in which the stable symlink dangles. Callers
+// that must keep working mid-upgrade (the installed hook wrapper, code-server's
+// RK_BIN) exec the launcher first and the stable path as fallback;
+// LauncherOrStable codifies that ladder for single-path consumers.
 package selfpath
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 )
 
 // CellarMarker is the Cellar path segment that identifies a Homebrew-installed
@@ -69,4 +80,104 @@ func Stable() (string, error) {
 		return "", err
 	}
 	return StableFor(resolved), nil
+}
+
+// LauncherRelDir is the per-machine launcher directory relative to $HOME. It
+// MUST stay off PATH: callers resolve the stable path with
+// exec.LookPath("run-kit") first, so a launcher on PATH would resolve to itself
+// on the next re-run and the link would loop.
+const LauncherRelDir = ".local/share/rk/bin"
+
+// LauncherFor returns the rk-owned launcher symlink path for a given home.
+func LauncherFor(home string) string {
+	return filepath.Join(home, filepath.FromSlash(LauncherRelDir), "run-kit")
+}
+
+// Launcher is LauncherFor(os.UserHomeDir()).
+func Launcher() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return LauncherFor(home), nil
+}
+
+// LiveLauncherFor returns the launcher path for home when it is a live
+// rk-owned pointer — a symlink (rk only ever places symlinks there; a regular
+// file is the user's and never rk's) whose target currently resolves. An
+// absent, foreign, or dangling launcher reports ok=false: `rk agent setup` is
+// optional, and Homebrew's post-link cleanup deletes the old Cellar target, so
+// neither presence nor liveness can be assumed.
+func LiveLauncherFor(home string) (path string, ok bool) {
+	p := LauncherFor(home)
+	info, err := os.Lstat(p)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return "", false
+	}
+	if _, err := os.Stat(p); err != nil {
+		return "", false
+	}
+	return p, true
+}
+
+// LauncherOrStable resolves the rk path for a long-lived consumer handed a
+// single path (code-server's RK_BIN): the launcher when LiveLauncherFor
+// accepts it, Stable otherwise. The launcher wins when live because its
+// Cellar target survives the mid-upgrade window in which the stable symlink
+// dangles; a missing/foreign/dangling launcher must not be exported, so the
+// version-stable path is the floor.
+func LauncherOrStable() (string, error) {
+	if home, err := os.UserHomeDir(); err == nil {
+		if p, ok := LiveLauncherFor(home); ok {
+			return p, nil
+		}
+	}
+	return Stable()
+}
+
+// ReplaceSymlink atomically points linkPath at target: the new symlink is
+// created under a temporary name in the same directory and renamed over the
+// old one, so no reader ever observes the path missing. Rename replaces an
+// existing symlink in place on every platform rk runs on. The temp entry is
+// removed on any failure, and temp SYMLINKS left by an earlier run that
+// crashed between Symlink and Rename are swept first (only symlinks — a
+// regular file under the temp pattern is not rk's).
+func ReplaceSymlink(target, linkPath string) error {
+	// Sweep temps left by a crashed earlier run — but only those whose owner
+	// pid (the name suffix) is gone. Setup and the daemon's start-time re-point
+	// can overlap, and removing a live process's fresh temp would fail its
+	// Rename with ENOENT.
+	prefix := "." + filepath.Base(linkPath) + ".tmp-"
+	pattern := filepath.Join(filepath.Dir(linkPath), prefix+"*")
+	if stale, _ := filepath.Glob(pattern); len(stale) > 0 {
+		for _, p := range stale {
+			fi, err := os.Lstat(p)
+			if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+				continue
+			}
+			if owner, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(p), prefix)); err == nil && owner != os.Getpid() && processAlive(owner) {
+				continue
+			}
+			_ = os.Remove(p)
+		}
+	}
+	tmp := filepath.Join(filepath.Dir(linkPath), fmt.Sprintf("%s%d", prefix, os.Getpid()))
+	if err := os.Symlink(target, tmp); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, linkPath); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// processAlive is the kill(pid, 0) liveness probe: no signal is sent. EPERM
+// means the process exists but is not ours, which still counts as alive.
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
