@@ -65,6 +65,14 @@ func tmuxOutputImpl(ctx context.Context, args ...string) ([]byte, error) {
 // StrictHostKeyChecking is deliberately untouched. Returned as argv elements —
 // tmux (≥3.4) executes a multi-argument shell-command directly, without a
 // shell, so nothing here is ever string-interpolated.
+//
+// The same connection also opens a loopback-bound SOCKS5 dynamic forward
+// (`-D 127.0.0.1:{SocksPort(localPort)}`): the desktop shell proxies its
+// present-guest views through it so a remote dev app loads at its real
+// loopback origin (`localhost:{port}`) instead of the `/proxy/{port}` path
+// prefix — full-SPA routing/assets work with no server-side change. It rides
+// the existing window's lifecycle (disconnect kills the window → both forwards
+// go with it), and is inert until the shell points a guest partition at it.
 func tunnelArgs(target string, localPort, remotePort int) []string {
 	return []string{
 		"ssh",
@@ -72,6 +80,7 @@ func tunnelArgs(target string, localPort, remotePort int) []string {
 		"-o", "BatchMode=yes",
 		"-o", "ServerAliveInterval=15",
 		"-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", localPort, remotePort),
+		"-D", fmt.Sprintf("127.0.0.1:%d", SocksPort(localPort)),
 		target,
 	}
 }

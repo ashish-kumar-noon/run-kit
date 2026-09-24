@@ -56,10 +56,37 @@ func TestTunnelArgs_ByteExactCommand(t *testing.T) {
 		"-o", "BatchMode=yes",
 		"-o", "ServerAliveInterval=15",
 		"-L", "127.0.0.1:3100:127.0.0.1:3000",
+		"-D", "127.0.0.1:3200",
 		"sahil@buildbox",
 	}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("tunnelArgs = %q, want %q", got, want)
+	}
+}
+
+// The SOCKS (-D) dynamic forward rides the same ssh connection as the -L
+// daemon forward, on the derived SocksPort(localPort). The desktop shell
+// proxies present-guest views through it.
+func TestTunnelArgs_CarriesDerivedSocksForward(t *testing.T) {
+	got := strings.Join(tunnelArgs("sahil@buildbox", 3142, 3000), " ")
+	if !strings.Contains(got, "-D 127.0.0.1:3242") {
+		t.Errorf("tunnelArgs missing derived -D forward (want 127.0.0.1:3242): %q", got)
+	}
+	if !strings.Contains(got, "-L 127.0.0.1:3142:127.0.0.1:3000") {
+		t.Errorf("tunnelArgs lost the -L forward: %q", got)
+	}
+}
+
+func TestSocksPort_DerivationAndRange(t *testing.T) {
+	cases := []struct{ local, want int }{{3100, 3200}, {3142, 3242}, {3199, 3299}}
+	for _, c := range cases {
+		if got := SocksPort(c.local); got != c.want {
+			t.Errorf("SocksPort(%d) = %d, want %d", c.local, got, c.want)
+		}
+	}
+	if SocksPort(PortRangeStart) != SocksPortRangeStart || SocksPort(PortRangeEnd) != SocksPortRangeEnd {
+		t.Errorf("SocksPort range endpoints off: [%d,%d] want [%d,%d]",
+			SocksPort(PortRangeStart), SocksPort(PortRangeEnd), SocksPortRangeStart, SocksPortRangeEnd)
 	}
 }
 

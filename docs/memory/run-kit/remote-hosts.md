@@ -1,5 +1,5 @@
 ---
-description: "SSH-only remote hosts — the `rk remote` six-verb family (add/connect/list/status/disconnect/remove, no `update`) over `internal/remote`: remotes.yaml v1 with immutable 3100–3199 ports, the `ssh -N -L` tunnel as a window in the `rk-remotes` tmux session on the rk-daemon socket, idempotent connect (curl-installer bootstrap, older-than-local update, remote daemon start, origin via `rk url`), loopback binding with SSH as sole auth, and read-path validation of stored entries."
+description: "SSH-only remote hosts — the `rk remote` six-verb family (add/connect/list/status/disconnect/remove, no `update`) over `internal/remote`: remotes.yaml v1 with immutable 3100–3199 ports, the `ssh -N -L` (+ `-D` SOCKS, for present-over-SOCKS) tunnel as a window in the `rk-remotes` tmux session on the rk-daemon socket, idempotent connect (curl-installer bootstrap, older-than-local update, remote daemon start, origin via `rk url`), loopback binding with SSH as sole auth, and read-path validation of stored entries."
 type: memory
 ---
 # SSH-Only Remote Hosts (`rk remote`)
@@ -25,7 +25,7 @@ Code: `app/backend/cmd/rk/remote.go` (the command surface) over `app/backend/int
 |------|----------|
 | `add <target>` | Pure local registration — no ssh roundtrip. Stores the target verbatim, derives the name, assigns the local port, prints `Name:`/`Target:`/`Local:` data lines. |
 | `connect <name\|target>` | The one idempotent get-in flow (probe → bootstrap → update-if-older → remote daemon → derive origin → tunnel → readiness). Final stdout line is the local origin. |
-| `list` | `NAME / TARGET / LOCAL / TUNNEL / REMOTE DAEMON` via `tabwriter`; tunnel state from tmux, daemon state from an ssh probe per remote. |
+| `list` | `NAME / TARGET / LOCAL / SOCKS / TUNNEL / REMOTE DAEMON` via `tabwriter`; tunnel state from tmux, daemon state from an ssh probe per remote; `SOCKS` shows `127.0.0.1:<sp>` while up, else `-`. |
 | `status <name>` | Single-remote detail plus version skew (older → connect will update it; newer → left untouched). |
 | `disconnect <name>` | Kills only that remote's tunnel window. The remote daemon keeps running. |
 | `remove <name>` | Disconnect, then drop the entry. The remote installation is untouched. |
@@ -67,8 +67,10 @@ remotes:
 Tunnel processes MUST live in tmux on socket `rk-daemon` (`daemon.ServerSocket`), session `rk-remotes` (`remote.SessionName`), one window per remote named for the remote, running exactly:
 
 ```
-ssh -N -o BatchMode=yes -o ServerAliveInterval=15 -L 127.0.0.1:<lp>:127.0.0.1:<rp> <target>
+ssh -N -o BatchMode=yes -o ServerAliveInterval=15 -L 127.0.0.1:<lp>:127.0.0.1:<rp> -D 127.0.0.1:<sp> <target>
 ```
+
+The same connection also opens a loopback-bound **SOCKS5 dynamic forward** (`-D 127.0.0.1:<sp>`), where `<sp> = SocksPort(<lp>) = <lp> + 100` (the derived **3200–3299** range, 1:1 with the immutable `-L` range — no `remotes.yaml` field, `ports.go`). It rides the same window lifecycle (disconnect kills both forwards) and is inert until a client points at it: the **desktop shell** proxies its present-guest views through it so a remote dev app loads at its real loopback origin (`localhost:{port}`) instead of `/proxy/{port}` — full-SPA routing/assets work with no server-side change (see [desktop-shell](/run-kit/desktop-shell.md) § Present over SOCKS). The SOCKS address is surfaced by `rk remote status` (a `SOCKS:` line while the tunnel is up) and `list` (a `SOCKS` column), so the shell reads it rather than hardcoding the offset. (260924-bh5b-proxy-present-socks)
 
 The command is passed as **argv elements** — tmux ≥3.4 executes a multi-argument shell-command directly, without a shell, so nothing is string-interpolated. Session creation uses exact-match targets (`=rk-remotes`) and pins CWD to `tmux.ServerBirthDir()` when it births the tmux server (the server-birth seam rule — a browser-only user with no local daemon still tunnels, and rk's own CWD may be a later-deleted worktree). Tunnel state is derived per request from one `list-windows -F '#{window_name}\t#{pane_current_command}'` call; a missing session or absent tmux server is the empty map (all down), never an error. There is no supervisor and no auto-reconnect — the one caller-scoped exception is `rk daemon restart --full`, which captures the up-set (`Load` ∩ `ListTunnels`) before killing the whole rk-daemon server and re-runs the idempotent `Connect` for exactly those remotes after the fresh start (user-initiated, one-shot; per-remote failures warn and never fail the restart — see [daemon-lifecycle](/run-kit/daemon-lifecycle.md) § Daemon Lifecycle → `--full` semantics).
 

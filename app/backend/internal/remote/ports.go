@@ -10,7 +10,26 @@ const (
 	PortRangeStart = 3100
 	// PortRangeEnd is the last assignable local tunnel port (inclusive).
 	PortRangeEnd = 3199
+
+	// socksPortOffset maps a remote's immutable local (-L) port to its SOCKS
+	// (-D) port on the same ssh connection. The mapping is 1:1 and derived (not
+	// stored), so it needs no remotes.yaml migration and the desktop shell can
+	// recover the SOCKS port from the local origin it already knows.
+	socksPortOffset = 100
+	// SocksPortRangeStart / SocksPortRangeEnd document the derived SOCKS range
+	// (the -L range shifted by socksPortOffset). It is clear of the -L range.
+	SocksPortRangeStart = PortRangeStart + socksPortOffset // 3200
+	SocksPortRangeEnd   = PortRangeEnd + socksPortOffset   // 3299
 )
+
+// SocksPort returns the SOCKS (-D) port for a remote's local (-L) port — the
+// present-over-SOCKS tunnel (the desktop shell proxies present-guest views
+// through it so a remote dev app loads at its real loopback origin). Derived,
+// not stored: localPort + socksPortOffset, so it is 1:1 with the immutable
+// local port and recoverable from it on both the CLI and shell sides.
+func SocksPort(localPort int) int {
+	return localPort + socksPortOffset
+}
 
 // AssignPort picks the local port for a new remote. taken is the host's
 // current live listener set (ports.ListeningNow at the call boundary);

@@ -1,0 +1,7 @@
+{"action":"enter","driver":"fab-new","event":"stage-transition","stage":"intake","ts":"2026-09-24T19:04:03Z"}
+{"args":"proxy present over SOCKS: route the desktop-shell present guest through an ssh -D SOCKS tunnel on the existing rk remote connection so a remote dev app loads at its real origin (fixes full-SPA routing/assets for the native engine), independent of the own-origin PR","cmd":"fab-new","event":"command","ts":"2026-09-24T19:04:03Z"}
+{"action":"enter","event":"stage-transition","stage":"apply","ts":"2026-09-24T19:06:37Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"review","ts":"2026-09-24T19:42:25Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"hydrate","ts":"2026-09-24T19:51:32Z"}
+{"event":"review","result":"passed","ts":"2026-09-24T19:51:32Z"}
+{"action":"enter","driver":"fab-fff","event":"stage-transition","stage":"ship","ts":"2026-09-24T19:51:32Z"}

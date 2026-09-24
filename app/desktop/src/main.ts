@@ -164,6 +164,7 @@ import {
   WebViewEntry,
   WebViewsState,
 } from "./web-views";
+import { guestProxyPlan, SHARED_GUEST_PARTITION } from "./guest-proxy";
 import { matchChord, parseChordSpecs, ChordSpec } from "./chords";
 import {
   loadWindows,
@@ -549,10 +550,10 @@ function hostWebPreferences(): Electron.WebPreferences {
 
 // ─── Web-tile guests (WebContentsView siblings of the host view) ────────────
 
-/** Guests run in a dedicated partition — separate from the default session
- *  the SPA runs in, so external logins persist like a browser profile and
- *  never share a jar with rk. */
-const GUEST_PARTITION = "persist:rk-web";
+// Guests run in dedicated partition(s) — separate from the default session the
+// SPA runs in, so external logins persist like a browser profile and never
+// share a jar with rk. Per-host partitions (guest-proxy.ts) isolate each
+// rk-remote host's SOCKS-proxied guests; SHARED_GUEST_PARTITION is the default.
 const GUEST_BACKGROUND = "#0f1117"; // the host view's boot background
 const GUEST_BORDER_RADIUS_PX = 6;
 /** The SPA's per-tab identity is bounded (the strict badge:set posture). */
@@ -564,21 +565,26 @@ const WEB_FIND_TEXT_MAX_LENGTH = 1024;
 const WEB_ZOOM_FACTOR_MIN = 0.25;
 const WEB_ZOOM_FACTOR_MAX = 5;
 
-let guestSessionRef: Electron.Session | null = null;
-function guestSession(): Electron.Session {
-  if (guestSessionRef) return guestSessionRef;
-  const s = session.fromPartition(GUEST_PARTITION);
-  // Deny-by-default: a guest is an arbitrary page; nothing it asks for
-  // (camera, geolocation, notifications, clipboard) is granted.
-  s.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-  guestSessionRef = s;
+/** Per-partition guest sessions (Option A): each rk-remote host gets its OWN
+ *  SOCKS-proxied partition, every other guest shares SHARED_GUEST_PARTITION.
+ *  Cached + deny-by-default permission-handled once per partition. */
+const guestSessions = new Map<string, Electron.Session>();
+function guestSessionFor(partition: string): Electron.Session {
+  let s = guestSessions.get(partition);
+  if (!s) {
+    s = session.fromPartition(partition);
+    // Deny-by-default: a guest is an arbitrary page; nothing it asks for
+    // (camera, geolocation, notifications, clipboard) is granted.
+    s.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    guestSessions.set(partition, s);
+  }
   return s;
 }
 
 /** Guest hardening — NO preload: a guest never sees runkitShell. */
-function guestWebPreferences(): Electron.WebPreferences {
+function guestWebPreferences(guestSes: Electron.Session): Electron.WebPreferences {
   return {
-    session: guestSession(),
+    session: guestSes,
     sandbox: true,
     contextIsolation: true,
     nodeIntegration: false,
@@ -1096,7 +1102,17 @@ function createWebView(
   tabKey: string,
   url: string,
 ): void {
-  const view = new WebContentsView({ webPreferences: guestWebPreferences() });
+  // Resolve the guest's partition + proxy + load URL: an rk-remote host's
+  // /proxy tile loads its REAL loopback origin through the host's SOCKS
+  // partition; every other guest keeps the shared DIRECT partition and an
+  // unchanged URL (guest-proxy.ts, Option A — per-host isolation).
+  const hostEntry = loadHosts(userDataDir()).hosts.find((h) => h.id === host.hostId);
+  const plan = hostEntry
+    ? guestProxyPlan(hostEntry, url)
+    : { partition: SHARED_GUEST_PARTITION, socksProxyRules: null, loadUrl: url };
+  const guestSes = guestSessionFor(plan.partition);
+
+  const view = new WebContentsView({ webPreferences: guestWebPreferences(guestSes) });
   view.setBackgroundColor(GUEST_BACKGROUND);
   view.setBorderRadius(GUEST_BORDER_RADIUS_PX);
   win.contentView.addChildView(view);
@@ -1113,7 +1129,20 @@ function createWebView(
     webContentsId: view.webContents.id,
   });
   wireGuestRelay(view.webContents, host.webContentsId, tabKey);
-  void view.webContents.loadURL(url);
+  if (plan.socksProxyRules) {
+    // Apply the partition's SOCKS proxy BEFORE loading, so the guest's first
+    // request rides it (setProxy is async + idempotent). Then load the real
+    // remote origin → the SOCKS forward → the dev box's loopback.
+    guestSes
+      .setProxy({ proxyRules: plan.socksProxyRules, proxyBypassRules: "<-loopback>" })
+      .catch((err) => console.error("[web] guest setProxy failed", plan.partition, err))
+      .finally(() => {
+        if (!view.webContents.isDestroyed()) void view.webContents.loadURL(plan.loadUrl);
+      });
+  } else {
+    // Shared direct partition — today's behavior, byte-identical.
+    void view.webContents.loadURL(plan.loadUrl);
+  }
 }
 
 /** The guest's owning host is the one attached in its window. Painting a
@@ -2441,7 +2470,14 @@ function registerIpcHandlers(): void {
     if (!parsed) return { ok: false, error: "Invalid request" };
     const guest = webSenderGuest(event, parsed.tabKey);
     if (!guest) return { ok: false, error: "Unknown tab" };
-    void guest.handle.webContents.loadURL(parsed.url);
+    // Route through the same rewrite plan as web:create so a /proxy URL sent to a
+    // SOCKS-partition guest still loads the app's real origin — never the remote
+    // daemon's /proxy prefix through the tunnel (which would re-break SPA routing).
+    // The guest's partition + proxy are already applied at create; only the URL
+    // is re-planned here.
+    const loadHost = loadHosts(userDataDir()).hosts.find((h) => h.id === guest.hostId);
+    const loadUrl = loadHost ? guestProxyPlan(loadHost, parsed.url).loadUrl : parsed.url;
+    void guest.handle.webContents.loadURL(loadUrl);
     return { ok: true };
   });
 

@@ -286,11 +286,11 @@ func runRemoteList(cmd *cobra.Command, _ []string) error {
 
 	tunnels := remote.ListTunnels(cmd.Context())
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 8, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tTARGET\tLOCAL\tTUNNEL\tREMOTE DAEMON")
+	fmt.Fprintln(w, "NAME\tTARGET\tLOCAL\tSOCKS\tTUNNEL\tREMOTE DAEMON")
 	for _, r := range f.Remotes {
 		st := remote.Inspect(cmd.Context(), r, tunnels)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			r.Name, r.Target, r.Origin(), tunnelWord(st.TunnelUp), st.Daemon)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			r.Name, r.Target, r.Origin(), socksColumn(st.TunnelUp, r.LocalPort), tunnelWord(st.TunnelUp), st.Daemon)
 	}
 	return w.Flush()
 }
@@ -300,6 +300,17 @@ func tunnelWord(up bool) string {
 		return "up"
 	}
 	return "down"
+}
+
+// socksColumn renders the SOCKS (-D) proxy address the tunnel carries — the
+// present-over-SOCKS forward the desktop shell points its present-guest
+// partition at. Only meaningful while the tunnel is up (the forward lives with
+// the ssh window); shown as "-" when down.
+func socksColumn(up bool, localPort int) string {
+	if !up {
+		return "-"
+	}
+	return fmt.Sprintf("127.0.0.1:%d", remote.SocksPort(localPort))
 }
 
 func runRemoteStatus(cmd *cobra.Command, args []string) error {
@@ -322,6 +333,9 @@ func runRemoteStatus(cmd *cobra.Command, args []string) error {
 	sink.Dataf("Target:        %s\n", r.Target)
 	sink.Dataf("Local:         %s\n", r.Origin())
 	sink.Dataf("Tunnel:        %s\n", tunnelWord(st.TunnelUp))
+	if st.TunnelUp {
+		sink.Dataf("SOCKS:         127.0.0.1:%d\n", remote.SocksPort(r.LocalPort))
+	}
 	sink.Dataf("Remote daemon: %s\n", st.Daemon)
 	if st.RemoteVersion != "" {
 		sink.Dataf("Remote rk:     v%s\n", st.RemoteVersion)
