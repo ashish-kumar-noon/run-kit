@@ -525,6 +525,13 @@ interface SurfaceLayoutProps {
    *  set, the gui header's meta chip reads `keys → desktop` and the pinned
    *  block's capture verb latches. */
   guiCapture?: boolean;
+  /** The web tile's keyboard-capture latch (`rk-web-capture`, owned by
+   *  app.tsx) — while set, the web header shows a `keys → page` chip and the
+   *  URL bar's capture verb latches; both web engines hand every chord but the
+   *  release binding to the page. */
+  webCapture?: boolean;
+  /** Flip the web capture latch (the URL-bar verb's click seam). */
+  onWebCaptureChange?: (on: boolean) => void;
   guiResizeLocked?: boolean;
   guiQuality?: GuiQuality;
   guiStatsVisible?: boolean;
@@ -782,6 +789,8 @@ function WebTileContent({
   onInteract,
   onPageTitle,
   shouldReclaimChord,
+  webCapture,
+  onWebCaptureChange,
 }: {
   server: string;
   /** The tile window's owning session (the override entry's session half). */
@@ -794,6 +803,9 @@ function WebTileContent({
   onInteract?: () => void;
   onPageTitle: (title: string | null) => void;
   shouldReclaimChord?: (e: KeyboardEvent) => boolean;
+  /** The web keyboard-capture latch + its flip seam (SurfaceLayout props). */
+  webCapture?: boolean;
+  onWebCaptureChange?: (on: boolean) => void;
 }) {
   const { addToast } = useToast();
   const webOverride = useWindowStore(
@@ -901,6 +913,8 @@ function WebTileContent({
     <IframeWindow
       tabs={webOverride?.webTabs ?? win.webTabs ?? []}
       active={webOverride?.webActive ?? win.webActive}
+      webCapture={webCapture}
+      onWebCaptureChange={onWebCaptureChange}
       // The tile's tmux identity — scopes the native engine's guest retention
       // (park/adopt) and the chrome-owned destroy rule. A foreign tile passes
       // its HOME window, so the surface keeps one guest wherever it is shown.
@@ -977,6 +991,8 @@ export function SurfaceLayout({
   guiToolbarVisible = false,
   onGuiToolbarVisibleChange,
   guiCapture = false,
+  webCapture = false,
+  onWebCaptureChange,
   guiResizeLocked = false,
   guiQuality = "balanced",
   guiStatsVisible = false,
@@ -2691,6 +2707,8 @@ export function SurfaceLayout({
             windowId={tileWinId}
             win={windowRecordFor(tileWinId)}
             visible={visible}
+            webCapture={webCapture}
+            onWebCaptureChange={onWebCaptureChange}
             onInteract={() => focusLeaf(leafId)}
             onPageTitle={(title) =>
               setWebPageTitles((prev) => {
@@ -2941,6 +2959,10 @@ export function SurfaceLayout({
     // a control).
     const guiCaptured = kind === "gui" && guiCapture;
     const meta = guiCaptured ? "keys → desktop" : tileMeta(kind, tileWin, gui);
+    // The web capture latch renders its own consequence chip (`keys → page`)
+    // — the web header's meta slot doubles as the page-title fallback, so the
+    // gui's meta-swap can't carry it; same styling (a label, not a control).
+    const webCaptured = kind === "web" && webCapture;
     // The tile window's progress slot (a foreign tty's chip/line render on
     // its own tile, never the route window's).
     const tileProgress =
@@ -3146,6 +3168,15 @@ export function SurfaceLayout({
                   </span>
                 )}
               </>
+            )}
+            {webCaptured && (
+              <span
+                data-testid="web-capture-chip"
+                data-no-tile-drag
+                className="shrink-0 rounded px-1.5 text-[10px] bg-accent-green/15 text-accent-green"
+              >
+                keys → page
+              </span>
             )}
             {/* rk-slot: gui-fold — the gui tile's session controls live in
                 the header spring as a measured priority fold (gui-toolbar.tsx,

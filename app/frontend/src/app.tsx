@@ -102,6 +102,7 @@ import {
   type GuiQuality,
   type GuiZoom,
 } from "@/lib/gui-posture";
+import { readWebCapture, writeWebCapture } from "@/lib/web-capture";
 import { GUI_SEND_KEY_MIRROR_REFUSAL, sendKeyChord, type KeyChord } from "@/lib/gui-send-key";
 import { buildZenActions } from "@/lib/palette/zen";
 import { buildCodeActions } from "@/lib/palette/code";
@@ -1507,6 +1508,16 @@ function AppShell() {
     setGuiCapture(on);
     writeGuiCapture(on);
   }, []);
+  // The web tile's keyboard-capture latch (`rk-web-capture`) — the gui latch's
+  // mirror, same grammar. While latched BOTH web engines hand every chord but
+  // the release binding (⌘⇧G) to the page: the iframe engine via the narrowed
+  // reclaim predicate below, the native engine via the narrowed chord table
+  // (IframeWindow → buildWebChordTable).
+  const [webCapture, setWebCapture] = useState(() => readWebCapture());
+  const handleWebCaptureChange = useCallback((on: boolean) => {
+    setWebCapture(on);
+    writeWebCapture(on);
+  }, []);
   // The Send key prompt's open state (the palette's `GUI: Send key…` row opens
   // it; the prompt owns parsing/validation).
   const [guiSendKeyOpen, setGuiSendKeyOpen] = useState(false);
@@ -2200,10 +2211,15 @@ function AppShell() {
   // only inside the WEB tile's frame (code-server keeps its own find).
   const reclaimChordForKind = useCallback(
     (kind: SurfaceKind) => (e: KeyboardEvent) =>
-      // The capture latch narrows the GUI reclaim to the release binding
-      // alone; the code/web iframe paths never see the flag.
-      hasReclaimableMatch(e, keybindings.bindings, kind, kind === "gui" && guiCapture),
-    [keybindings.bindings, guiCapture],
+      // The capture latches narrow the GUI / web reclaim to that kind's
+      // release binding alone; the code iframe path never sees a flag.
+      hasReclaimableMatch(
+        e,
+        keybindings.bindings,
+        kind,
+        (kind === "gui" && guiCapture) || (kind === "web" && webCapture),
+      ),
+    [keybindings.bindings, guiCapture, webCapture],
   );
 
   // The docked compose strip is a single global surface (260718-dhdj) rendered
@@ -4547,6 +4563,15 @@ function AppShell() {
                   // mounted web tile answers `web-zoom` (detail.direction).
                   // No chord: Cmd/Ctrl+Plus/Minus/0 stay shell-owned (intake
                   // exclusion; gestures cover the muscle-memory path).
+                  // `Web: Capture/Release keyboard` — palette parity
+                  // (Constitution V) for the URL-bar capture toggle and ⌘⇧G;
+                  // the gui row's label-flip vocabulary. Content-gated like
+                  // web-find (an onboarding tile has no page to hand keys to).
+                  {
+                    id: "web-capture-toggle",
+                    label: webCapture ? "Web: Release keyboard" : "Web: Capture keyboard",
+                    onSelect: () => handleWebCaptureChange(!webCapture),
+                  },
                   ...(["in", "out", "reset"] as const).map((direction) => ({
                     id: `web-zoom-${direction}`,
                     label:
@@ -4625,7 +4650,7 @@ function AppShell() {
           }))
         : []),
     ],
-    [sessionName, fixedWidth, toggleFixedWidth, toggleComposeStrip, composeStripEnabled, currentViews, resolvedView, switchView, bindingByAction, bindingHost, windowParam, isMobile, layout, panelSurfaces, applyLayout, layoutZoomed, focusedTileKind, focusedLeafId, mobileActiveTile, switchToTile, switchTargetDisabled, currentAltScreen, zenOn, toggleZen, server, effectiveWindow, addToast, codeServer, codeSrc, bringWindows, borrowInto, sendHome, windowsById],
+    [sessionName, fixedWidth, toggleFixedWidth, toggleComposeStrip, composeStripEnabled, currentViews, resolvedView, switchView, bindingByAction, bindingHost, windowParam, isMobile, layout, panelSurfaces, applyLayout, layoutZoomed, focusedTileKind, focusedLeafId, mobileActiveTile, switchToTile, switchTargetDisabled, currentAltScreen, zenOn, toggleZen, server, effectiveWindow, addToast, codeServer, codeSrc, bringWindows, borrowInto, sendHome, windowsById, webCapture, handleWebCaptureChange],
   );
 
   // Navigation actions (`Go: Back` / `Go: Forward` / ancestor entries,
@@ -5399,6 +5424,13 @@ function AppShell() {
       // narrowed reclaim predicate is what delivers the chord here while
       // every other chord passes to the guest.
       "gui-capture-toggle": guiGated("gui-capture-toggle", () => handleGuiCaptureChange(!guiCapture)),
+      // ⌘⇧G/Ctrl+Shift+G web keyboard capture — the SAME chord, gated to the
+      // web tile (webOnly), so exactly one of the two capture handlers is
+      // present at a time (the dispatcher runs the first present handler).
+      // While latched it is the only chord the web engines still reclaim.
+      // The palette body carries the hasWebUrl content gate: an onboarding
+      // tile has no page to capture for.
+      "web-capture-toggle": webGated("web-capture-toggle"),
       // ⌘1/⌘2/⌘3 tile chords (R4) — see `tileChord` above for the three-state
       // rule, gating, and the recording constraint. A window without the
       // surface (`availableTiles`) mounts no handler and the chord falls
@@ -5972,6 +6004,8 @@ function AppShell() {
               guiToolbarVisible={guiToolbarVisible}
               onGuiToolbarVisibleChange={handleGuiToolbarVisibleChange}
               guiCapture={guiCapture}
+              webCapture={webCapture}
+              onWebCaptureChange={handleWebCaptureChange}
               guiResizeLocked={guiResizeLocked}
               guiQuality={guiQuality}
               guiStatsVisible={guiStatsVisible}

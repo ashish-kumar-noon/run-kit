@@ -169,7 +169,7 @@ import {
   WebViewEntry,
   WebViewsState,
 } from "./web-views";
-import { matchChord, parseChordSpecs, ChordSpec } from "./chords";
+import { findChord, parseChordSpecs, ChordSpec } from "./chords";
 import {
   guestPartitionName,
   settleHostProxy,
@@ -1290,17 +1290,19 @@ function wireGuestRelay(contents: WebContents): void {
   // Chord reclaim: the guest's keydowns never reach the SPA document, so the
   // SPA enumerates its reclaim predicate into a per-guest table (web:chords)
   // and main matches here. A match is preventDefaulted (the page never sees
-  // it), hops OS focus to the host webContents — on EVERY matched chord,
+  // it), hops OS focus to the host webContents — on every matched chord,
   // Escape included, so the re-dispatched chord's result (a palette input, a
-  // find bar) is usable — and relays for the SPA to re-dispatch on its
-  // document. The registry-current re-check is the relay()'s identity rule:
+  // find bar) is usable; a `keepFocus` spec (the web keyboard-capture toggle)
+  // skips the hop so the user keeps typing in the page — and relays for the
+  // SPA to re-dispatch on its document. The registry-current re-check is the relay()'s identity rule:
   // a closing guest's late input must not speak for its replacement.
   contents.on("before-input-event", (event, input) => {
     const current = findWebViewByContents(webViews, contents.id);
     if (!current) return;
-    if (!matchChord(input, current.chords)) return;
+    const spec = findChord(input, current.chords);
+    if (!spec) return;
     event.preventDefault();
-    webContents.fromId(current.hostContentsId)?.focus();
+    if (!spec.keepFocus) webContents.fromId(current.hostContentsId)?.focus();
     relay("chord", {
       key: input.key,
       code: input.code,
