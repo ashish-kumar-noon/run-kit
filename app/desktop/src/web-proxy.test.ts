@@ -6,9 +6,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   guestPartitionName,
-  isTailnetHostname,
   proxyRulesFor,
   setProxyConfigFor,
+  settleHostProxy,
   webProxyModeFor,
 } from "./web-proxy";
 
@@ -64,45 +64,10 @@ test("a non-loopback host is probe-gated", () => {
 
 // ── proxyRulesFor ───────────────────────────────────────────────────────────
 
-test("proxyRulesFor an http origin targets the origin itself", () => {
-  assert.equal(proxyRulesFor("http://127.0.0.1:3100", 3000), "http://127.0.0.1:3100");
-  assert.equal(proxyRulesFor("http://100.101.2.3:3000", null), "http://100.101.2.3:3000");
-});
-
-test("proxyRulesFor a tailnet https origin targets the advertised raw port", () => {
-  assert.equal(
-    proxyRulesFor("https://dev.example.ts.net", 3001),
-    "http://dev.example.ts.net:3001",
-  );
-  assert.equal(proxyRulesFor("https://100.101.2.3", 3001), "http://100.101.2.3:3001");
-});
-
-test("proxyRulesFor a non-tailnet https origin has no target (never downgrades TLS)", () => {
-  assert.equal(proxyRulesFor("https://rk.example.com", 3001), null);
-  assert.equal(proxyRulesFor("https://10.0.0.5", 3001), null);
-  assert.equal(proxyRulesFor("https://ts.net.example.com", 3001), null);
-});
-
-test("isTailnetHostname accepts MagicDNS names and the 100.64.0.0/10 range only", () => {
-  assert.equal(isTailnetHostname("dev.example.ts.net"), true);
-  assert.equal(isTailnetHostname("DEV.Example.TS.NET."), true);
-  assert.equal(isTailnetHostname("100.64.0.1"), true);
-  assert.equal(isTailnetHostname("100.127.255.255"), true);
-  assert.equal(isTailnetHostname("100.63.255.255"), false);
-  assert.equal(isTailnetHostname("100.128.0.1"), false);
-  assert.equal(isTailnetHostname("100.100.300.1"), false);
-  assert.equal(isTailnetHostname("192.168.1.10"), false);
-  assert.equal(isTailnetHostname("example.com"), false);
-  assert.equal(isTailnetHostname("ts.net.example.com"), false);
-});
-
-test("proxyRulesFor an https origin with no advertised port has no target", () => {
-  assert.equal(proxyRulesFor("https://dev.example.ts.net", null), null);
-});
-
-test("proxyRulesFor rejects unparseable and non-http(s) urls", () => {
-  assert.equal(proxyRulesFor("not a url", 3001), null);
-  assert.equal(proxyRulesFor("ftp://host:21", 3001), null);
+test("proxyRulesFor targets the host's loopback proxy listener", () => {
+  assert.equal(proxyRulesFor(40123), "http://127.0.0.1:40123");
+  assert.equal(proxyRulesFor(1), "http://127.0.0.1:1");
+  assert.equal(proxyRulesFor(65535), "http://127.0.0.1:65535");
 });
 
 // ── setProxyConfigFor ───────────────────────────────────────────────────────
@@ -123,4 +88,76 @@ test("direct and legacy modes are plain direct sessions", () => {
   assert.deepEqual(setProxyConfigFor("direct", null), { mode: "direct" });
   assert.deepEqual(setProxyConfigFor("legacy", null), { mode: "direct" });
   assert.deepEqual(setProxyConfigFor("legacy", "http://127.0.0.1:3100"), { mode: "direct" });
+});
+
+// ── settleHostProxy ─────────────────────────────────────────────────────────
+
+/** Effect spies with a controllable staleness flag. */
+function settleEffects(current: () => boolean, listener: { port: number } | null = { port: 40123 }) {
+  const calls = { probe: 0, listener: 0, setProxy: 0 };
+  return {
+    calls,
+    effects: {
+      probeTunnel: () => {
+        calls.probe += 1;
+        return Promise.resolve(true);
+      },
+      ensureListener: () => {
+        calls.listener += 1;
+        return Promise.resolve(listener);
+      },
+      setProxy: () => {
+        calls.setProxy += 1;
+        return Promise.resolve();
+      },
+      isCurrent: current,
+    },
+  };
+}
+
+const remoteHost = { url: "http://100.101.2.3:3000", remote: "buildbox" };
+
+test("settleHostProxy probes, creates the listener, and applies proxy rules", async () => {
+  const { calls, effects } = settleEffects(() => true);
+  const mode = await settleHostProxy(remoteHost, null, effects);
+  assert.equal(mode, "proxy");
+  assert.deepEqual(calls, { probe: 1, listener: 1, setProxy: 1 });
+});
+
+test("settleHostProxy a stale query runs NO side effects after the probe", async () => {
+  // The host's URL changed while the probe was in flight (main.ts replaced
+  // the pending entry): no listener for the superseded origin, no setProxy
+  // on the shared guest session.
+  let current = true;
+  const { calls, effects } = settleEffects(() => current);
+  const probe = effects.probeTunnel;
+  effects.probeTunnel = async () => {
+    const ok = await probe();
+    current = false;
+    return ok;
+  };
+  const mode = await settleHostProxy(remoteHost, null, effects);
+  assert.equal(mode, "proxy"); // the derivation still answers the caller
+  assert.deepEqual(calls, { probe: 1, listener: 0, setProxy: 0 });
+});
+
+test("settleHostProxy a query gone stale during listener creation skips setProxy", async () => {
+  let current = true;
+  const { calls, effects } = settleEffects(() => current);
+  const ensure = effects.ensureListener;
+  effects.ensureListener = async () => {
+    const listener = await ensure();
+    current = false;
+    return listener;
+  };
+  const mode = await settleHostProxy(remoteHost, null, effects);
+  assert.equal(mode, "proxy");
+  assert.deepEqual(calls, { probe: 1, listener: 1, setProxy: 0 });
+});
+
+test("settleHostProxy degrades to legacy when no listener is available", async () => {
+  const { calls, effects } = settleEffects(() => true, null);
+  const mode = await settleHostProxy(remoteHost, null, effects);
+  assert.equal(mode, "legacy");
+  assert.deepEqual(calls, { probe: 1, listener: 1, setProxy: 1 });
 });

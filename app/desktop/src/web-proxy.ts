@@ -4,19 +4,23 @@
  * config mapping.
  *
  * Deliberately electron-free (the `web-views.ts` precedent): the impure
- * parts — `session.fromPartition`, the capability probe (`net.fetch` health
- * gate + raw-TCP CONNECT), and the awaited `session.setProxy` apply — live
- * in `main.ts`; the sibling `web-proxy.test.ts` covers every derivation arm
- * under plain `node --test`.
+ * parts — `session.fromPartition`, the capability probe (health `tunnel`
+ * field gate + a WebSocket round-trip through `/ws/tunnel`), the per-host
+ * loopback proxy listener (`tunnel-proxy.ts`), and the awaited
+ * `session.setProxy` apply — live in `main.ts` behind the injected
+ * `HostProxySettleEffects`; the sibling `web-proxy.test.ts` covers every
+ * derivation arm and the settle flow's staleness gating under plain
+ * `node --test`.
  *
  * Modes:
  * - `direct` — the host IS this machine's daemon: no proxy, the native
  *   engine loads literal URLs (`http://localhost:6000/…`).
  * - `proxy`  — a remote host whose capability probe passed: the host's guest
- *   session rides that host's rk forward proxy, so every guest URL resolves
- *   on the rk host.
+ *   session points at the host's loopback proxy listener in this process,
+ *   whose connections ride a WebSocket tunnel to the host's rk server, so
+ *   every guest URL resolves on the rk host.
  * - `legacy` — a remote host whose probe failed (an older rk server, or a
- *   TLS front end that drops CONNECT): today's `/proxy/{port}` behavior.
+ *   front end that refuses the tunnel upgrade): the `/proxy/{port}` path.
  */
 
 export type WebProxyMode = "direct" | "proxy" | "legacy";
@@ -64,43 +68,15 @@ export function webProxyModeFor(
 }
 
 /**
- * A MagicDNS name (`*.ts.net`) or an address in Tailscale's CGNAT range
- * `100.64.0.0/10` — the hosts whose traffic rides an encrypted tailnet hop.
+ * The `proxyRules` target for a host in `proxy` mode: the host's loopback
+ * proxy listener in this main process (`createLocalProxy` in
+ * `tunnel-proxy.ts`). Every guest connection terminates there and rides a
+ * WebSocket tunnel to the host's rk server, so the host origin needs no
+ * say in the rules — an `https:` origin included (`wss://` traverses the
+ * TLS front end).
  */
-export function isTailnetHostname(hostname: string): boolean {
-  const name = hostname.toLowerCase().replace(/\.$/, "");
-  if (name.endsWith(".ts.net")) return true;
-  const octets = name.split(".");
-  if (octets.length !== 4 || !octets.every((o) => /^\d{1,3}$/.test(o))) return false;
-  const [a, b] = octets.map(Number);
-  return a === 100 && b >= 64 && b <= 127 && octets.every((o) => Number(o) <= 255);
-}
-
-/**
- * The `proxyRules` target for a host in `proxy` mode, or null when no proxy
- * target exists (the caller derives `legacy` instead):
- * - `http:` origin (incl. an SSH host's viewer-side tunnel origin, which the
- *   existing `-L` forward carries to the remote rk port) ⇒ the origin's own
- *   host:port.
- * - `https:` origin ON A TAILNET (a TLS front end such as Tailscale Serve
- *   drops CONNECT) ⇒ the rk server's RAW listen port, advertised on
- *   `/api/health`, over plain http. Only a tailnet makes that hop safe — it is
- *   WireGuard-encrypted — so any other `https:` origin has no target: dropping
- *   its TLS to plaintext across an arbitrary network is never acceptable.
- */
-export function proxyRulesFor(hostUrl: string, advertisedPort: number | null): string | null {
-  let url: URL;
-  try {
-    url = new URL(hostUrl);
-  } catch {
-    return null;
-  }
-  if (url.protocol === "http:") return `http://${url.host}`;
-  if (url.protocol === "https:") {
-    if (advertisedPort === null || !isTailnetHostname(url.hostname)) return null;
-    return `http://${url.hostname}:${advertisedPort}`;
-  }
-  return null;
+export function proxyRulesFor(localPort: number): string {
+  return `http://127.0.0.1:${localPort}`;
 }
 
 /** The argument for the guest session's `setProxy`. `fixed_servers` carries
@@ -116,4 +92,54 @@ export function setProxyConfigFor(
     return { mode: "fixed_servers", proxyRules: rules, proxyBypassRules: "<-loopback>" };
   }
   return { mode: "direct" };
+}
+
+/** The impure halves of a host-mode settle, injected by main.ts so the flow
+ *  stays electron-free and unit-testable. */
+export interface HostProxySettleEffects {
+  /** The capability probe against the URL captured at settle start. */
+  probeTunnel(): Promise<boolean>;
+  /** The host's loopback proxy listener (null = degrade to legacy). */
+  ensureListener(): Promise<{ port: number } | null>;
+  /** The awaited guest-session setProxy apply. */
+  setProxy(config: ReturnType<typeof setProxyConfigFor>): Promise<void>;
+  /** Whether this settle still owns the host's pending slot — false once the
+   *  host's URL changed mid-settle and a newer query replaced it. Monotonic:
+   *  a replaced entry is never reinstated. */
+  isCurrent(): boolean;
+}
+
+/**
+ * The probe → listener → setProxy settle flow (main.ts runs it as the
+ * host's pending query). Side effects are current-gated: a settle whose
+ * pending entry was replaced mid-flight (the host's URL changed) MUST NOT
+ * create a listener for the superseded origin or setProxy the shared guest
+ * session — new guests would route through the old front end. The returned
+ * mode is the derivation either way; only the apply is gated.
+ */
+export async function settleHostProxy(
+  host: { url: string; remote?: string },
+  localOrigin: string | null,
+  effects: HostProxySettleEffects,
+): Promise<WebProxyMode> {
+  // An optimistic probe result isolates the locality question: "direct"
+  // here means local, anything else is remote/url and earns the real probe.
+  let mode = webProxyModeFor(host, localOrigin, true);
+  if (mode !== "direct") {
+    mode = webProxyModeFor(host, localOrigin, await effects.probeTunnel());
+  }
+  let rules: string | null = null;
+  if (mode === "proxy" && effects.isCurrent()) {
+    const listener = await effects.ensureListener();
+    if (listener === null) {
+      // No listener, no proxy — degrade, never a broken tile.
+      mode = "legacy";
+    } else {
+      rules = proxyRulesFor(listener.port);
+    }
+  }
+  if (effects.isCurrent()) {
+    await effects.setProxy(setProxyConfigFor(mode, rules));
+  }
+  return mode;
 }
