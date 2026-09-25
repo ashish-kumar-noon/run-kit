@@ -173,6 +173,18 @@ export function WebFrameNative({
   const lastSentBoundsRef = useRef<ShellWebRect | null>(null);
   const lastSentVisibleRef = useRef<boolean | null>(null);
   const rafRef = useRef<number | null>(null);
+  // True once the create has resolved. Main's per-tab channels reject every
+  // call before the guest exists ("Unknown tab"), and the create lands only
+  // after the host-mode query + proxy settle (a tunnel probe in remote-native
+  // mode), so a mount-time bounds/visible send is ALWAYS dropped — and with
+  // the dedupe refs recording it as sent, never re-sent until the rect
+  // changes (the guest sat at main's 0×0 default until a window resize).
+  // Until then measure() and the visibility effect only track state; the
+  // post-create block sends the current rect and visibility.
+  const createdRef = useRef(false);
+  // The latest visibility rule, for the post-create send (the effect that
+  // normally sends it has already run and been skipped).
+  const wantVisibleRef = useRef(false);
 
   const measure = useCallback(() => {
     const el = placeholderRef.current;
@@ -189,6 +201,7 @@ export function WebFrameNative({
       return;
     }
     setRectNonZero(true);
+    if (!createdRef.current) return;
     const last = lastSentBoundsRef.current;
     if (
       last !== null &&
@@ -216,6 +229,7 @@ export function WebFrameNative({
     // Set when the chrome destroys this tab through the handle (tab close /
     // URL-slot rewrite): the cleanup must NOT park a tab that is gone.
     let chromeDestroyed = false;
+    createdRef.current = false;
     const dispose = onShellWebEvent((event: ShellWebEvent) => {
       // Demux before ANY state update: an event for another tab is dropped.
       if (event.tabKey !== tabKey) return;
@@ -307,6 +321,15 @@ export function WebFrameNative({
       // not lost (prop changes also re-send immediately from their effects).
       void setShellWebViewChords(tabKey, chordTableRef.current ?? []);
       void setShellWebViewZoom(tabKey, zoomRef.current);
+      // Bounds and visibility likewise: every pre-create send was skipped, so
+      // push the current rect and the current visibility rule now — bounds
+      // first, so the guest never shows at main's 0×0 default (an adopted
+      // guest's record is from its last mount and is refreshed the same way).
+      createdRef.current = true;
+      lastSentBoundsRef.current = null;
+      measure();
+      lastSentVisibleRef.current = wantVisibleRef.current;
+      void setShellWebViewVisible(tabKey, wantVisibleRef.current);
     })();
     const reload = () => {
       setTileError(null);
@@ -332,6 +355,7 @@ export function WebFrameNative({
     });
     return () => {
       cancelled = true;
+      createdRef.current = false;
       unregisterHandle(url);
       // Unmount PARKS (the tile went away; a same-identity remount adopts);
       // only a chrome-issued destroy — a tab that is GONE — skips it, its
@@ -348,7 +372,7 @@ export function WebFrameNative({
         rafRef.current = null;
       }
     };
-  }, [url, tabKey, identity, registerHandle, unregisterHandle, interactRef]);
+  }, [url, tabKey, identity, registerHandle, unregisterHandle, interactRef, measure]);
 
   // Zoom application: the INITIAL factor is sent by the mount effect after
   // the create resolves (a mount-time send races the guest's existence), so
@@ -437,7 +461,11 @@ export function WebFrameNative({
   // move → idle edge before re-showing.
   const wantVisible =
     active && !overlayOpen && rectNonZero && tileError === null && posture !== "move";
+  wantVisibleRef.current = wantVisible;
   useEffect(() => {
+    // Pre-create the guest does not exist yet — the post-create block sends
+    // the then-current rule (recording it here would dedupe that send away).
+    if (!createdRef.current) return;
     if (lastSentVisibleRef.current === wantVisible) return;
     // Bounds precede the show (the shell also applies parked bounds on show;
     // this ordering is belt-and-braces).
