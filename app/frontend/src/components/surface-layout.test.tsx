@@ -182,6 +182,8 @@ type LayoutOverrides = {
   guiActions?: GuiPaletteAction[];
   guiToolbarVisible?: boolean;
   onGuiToolbarVisibleChange?: (visible: boolean) => void;
+  webCapture?: boolean;
+  onWebCaptureChange?: (on: boolean) => void;
 };
 
 /** The minimal WindowInfo the tty header's StatusDot consumes (260812-wfic
@@ -258,6 +260,8 @@ function layoutElement(overrides: LayoutOverrides = {}) {
       guiActions={overrides.guiActions}
       guiToolbarVisible={overrides.guiToolbarVisible}
       onGuiToolbarVisibleChange={overrides.onGuiToolbarVisibleChange}
+      webCapture={overrides.webCapture}
+      onWebCaptureChange={overrides.onWebCaptureChange}
       />
     </ToastProvider>
   );
@@ -600,6 +604,56 @@ describe("SurfaceLayout zoom", () => {
     const zoom = screen.getByRole("button", { name: "Expand Code" });
     expect(zoom.className).not.toContain("text-accent-green");
     expect(zoom).toHaveAttribute("aria-pressed", "false");
+  });
+});
+
+describe("SurfaceLayout web header keyboard capture", () => {
+  const SPLIT: Layout = layoutOf("h(tty,web)");
+
+  it("renders the capture verb in the web header beside Expand/Close, flipping the latch on click", () => {
+    const onWebCaptureChange = vi.fn();
+    const { rerender } = renderLayout({ layout: SPLIT, onWebCaptureChange });
+    const header = screen.getByTestId("surface-tile-web");
+    const btn = within(header).getByTestId("web-capture-toggle");
+    expect(btn).toHaveAttribute("aria-pressed", "false");
+    // It shares the header rail with the layout verbs — same row, before Expand.
+    const expand = within(header).getByRole("button", { name: "Expand Web" });
+    expect(btn.parentElement).toBe(expand.parentElement);
+    expect(btn.compareDocumentPosition(expand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId("web-capture-chip")).toBeNull();
+    fireEvent.click(btn);
+    expect(onWebCaptureChange).toHaveBeenCalledWith(true);
+
+    rerender(layoutElement({ layout: SPLIT, onWebCaptureChange, webCapture: true }));
+    expect(screen.getByTestId("web-capture-toggle")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("web-capture-chip").textContent).toBe("keys → page");
+    fireEvent.click(screen.getByTestId("web-capture-toggle"));
+    expect(onWebCaptureChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("renders at arity 1 too (no layout verbs) — capture is a content verb", () => {
+    renderLayout({ layout: layoutOf("web"), onWebCaptureChange: vi.fn() });
+    expect(screen.getByTestId("web-capture-toggle")).toBeTruthy();
+  });
+
+  it("is absent on an onboarding tile (no URL), on mobile, and when unwired", () => {
+    const { unmount } = renderLayout({
+      layout: SPLIT,
+      window: { webTabs: [], webActive: 0 },
+      onWebCaptureChange: vi.fn(),
+    });
+    expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
+    unmount();
+    const second = renderLayout({ layout: SPLIT, isMobile: true, onWebCaptureChange: vi.fn() });
+    expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
+    second.unmount();
+    renderLayout({ layout: SPLIT });
+    expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
+  });
+
+  it("never renders on non-web tiles", () => {
+    renderLayout({ layout: layoutOf("h(tty,code)"), onWebCaptureChange: vi.fn() });
+    expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
   });
 });
 

@@ -27,8 +27,8 @@ While captured, the iframe engine's `shouldReclaimChord` SHALL match only the ki
 
 ### Chrome
 
-#### R4: URL-bar capture button
-The web tile chrome SHALL render a keyboard-capture button (tip "Keyboard capture" with the chord, `aria-pressed`, accent when on) that flips the latch.
+#### R4: Header capture button
+The web tile HEADER SHALL render a keyboard-capture verb just before the Expand / ✕ layout verbs (tip "Keyboard capture" with the chord, `aria-pressed`, accent when on). It flips the latch. It SHALL render at any arity, only when the tile has a URL, and never on mobile. The URL bar SHALL carry no capture button.
 
 #### R5: Header chip and palette verb
 A captured web tile's header SHALL show a `keys → page` chip. The palette SHALL offer `Web: Capture keyboard` / `Web: Release keyboard` when the web tile has a URL.
@@ -48,7 +48,7 @@ A captured web tile's header SHALL show a `keys → page` chip. The palette SHAL
 - [x] A-002 R2: `web-capture-toggle` is ⌘⇧G webOnly; `findConflicts` reports no web/gui clash
 - [x] A-003 R3: captured `hasReclaimableMatch` for web matches only ⌘⇧G; captured chord table is exactly the release arms
 - [x] A-004 R3: a remapped release binding is followed; an unbound one yields an empty table
-- [x] A-005 R4: button reflects `aria-pressed` and calls `onWebCaptureChange(!on)`
+- [x] A-005 R4: the header button sits in the same rail as Expand (before it), reflects `aria-pressed`, and calls `onWebCaptureChange(!on)`; it is absent on an onboarding tile, on mobile, and on non-web tiles
 - [x] A-006 R5: chip renders only on a captured web tile; palette verb label follows state
 - [x] A-007 Typecheck clean; full frontend vitest suite green; desktop `node --test` green
 - [x] A-008 R2: ⇧Ctrl+G / ⇧⌘G under terminal focus are not refused

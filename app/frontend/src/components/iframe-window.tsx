@@ -6,7 +6,6 @@ import { FindBar } from "@/components/find-bar";
 import {
   FindGlyph,
   InspectGlyph,
-  KeyboardGlyph,
   OpenExternalGlyph,
   RefreshGlyph,
   WebBackGlyph,
@@ -48,7 +47,6 @@ import {
 import { useLocalStorageBoolean } from "@/hooks/use-local-storage-boolean";
 import { useKeybindings } from "@/hooks/use-keybindings";
 import { buildWebChordTable } from "@/lib/web-chord-table";
-import { formatCombo } from "@/lib/keybindings";
 import { canShellWeb } from "@/lib/shell";
 import {
   WEB_NATIVE_ENGINE_DEFAULT,
@@ -121,12 +119,10 @@ interface IframeWindowProps {
   onPageMeta?: (meta: { title: string | null }) => void;
   /** The web keyboard-capture latch (`rk-web-capture`, owned by app.tsx).
    *  While set the native engine's chord table narrows to the release binding
-   *  (`buildWebChordTable(bindings, true)`) and the URL-bar capture verb
-   *  latches; the iframe engine's narrowing rides `shouldReclaimChord`. */
+   *  (`buildWebChordTable(bindings, true)`); the iframe engine's narrowing
+   *  rides `shouldReclaimChord`. The toggle verb lives in the tile header
+   *  (SurfaceLayout), not this chrome. */
   webCapture?: boolean;
-  /** Flip the latch — the URL-bar capture verb's click seam. Absent ⇒ the verb
-   *  is not rendered (a mount context with no capture posture). */
-  onWebCaptureChange?: (on: boolean) => void;
 }
 
 /** Trailing debounce for persisting gesture-driven zoom — a pinch emits
@@ -217,7 +213,6 @@ export function IframeWindow({
   shouldReclaimChord,
   onPageMeta,
   webCapture = false,
-  onWebCaptureChange,
 }: IframeWindowProps) {
   // Engine selection: bridge presence × the per-viewer preference (the pure
   // rule shared with the palette entry). canShellWeb() is read per render —
@@ -274,19 +269,13 @@ export function IframeWindow({
   // this document, so the predicate cannot run at event time there). A rebind
   // re-derives the table; the iframe engine ignores the prop — its reclaim
   // runs in-document.
-  const { bindings, byAction, host } = useKeybindings();
+  const { bindings } = useKeybindings();
   // The capture latch narrows the native engine's table to the release chord;
   // the engine re-uploads on every table change, so a flip takes effect live.
   const chordTable = useMemo(
     () => buildWebChordTable(bindings, webCapture),
     [bindings, webCapture],
   );
-  // The capture verb's tooltip chord — only when the binding is live (a chip
-  // advertising a dead chord would lie; the gui toolbar's kbdFor rule).
-  const captureBinding = byAction.get("web-capture-toggle");
-  const captureKbd = captureBinding?.enabled
-    ? formatCombo({ code: captureBinding.code, tier: captureBinding.tier }, host.platform)
-    : undefined;
 
   // ── per-frame state (P3: one chrome, N frames) ──────────────────────────
   // Each engine reports its chrome slice up; the map is keyed by URL (the
@@ -1289,24 +1278,6 @@ export function IframeWindow({
                 <FindGlyph />
               </button>
             </Tip>
-            {/* Keyboard capture — the gui toolbar's capture verb, mirrored:
-                while latched every chord but ⌘⇧G reaches the page (both
-                engines). A latch, so it keeps a green wash, not just ink. */}
-            {onWebCaptureChange && (
-              <Tip label="Keyboard capture" kbd={captureKbd} placement="top">
-                <button
-                  data-testid="web-capture-toggle"
-                  onClick={() => onWebCaptureChange(!webCapture)}
-                  className={`shrink-0 w-7 h-7 flex items-center justify-center rounded hover:bg-bg-card hover:text-text-primary ${
-                    webCapture ? "text-accent-green bg-accent-green/15" : "text-text-secondary"
-                  }`}
-                  aria-label="Keyboard capture"
-                  aria-pressed={webCapture}
-                >
-                  <KeyboardGlyph />
-                </button>
-              </Tip>
-            )}
             {/* Content zoom (R4) — the universal floor trigger: the only one
                 that works over an external frame (gestures never cross the
                 boundary). Text glyphs per the URL-bar vocabulary; the readout

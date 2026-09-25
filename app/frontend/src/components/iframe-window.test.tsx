@@ -129,38 +129,11 @@ describe("IframeWindow", () => {
     expect(screen.queryByLabelText("Switch to terminal")).toBeNull();
   });
 
-  // Keyboard capture (web twin of the gui toolbar's capture button): the
-  // chrome button is a pure view of the app-owned latch.
-  describe("keyboard capture button", () => {
-    it("is absent when no onWebCaptureChange is wired", () => {
-      renderIframe({ tabs: ["http://localhost:8080/docs"] });
-      expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
-    });
-
-    it("reflects the latch via aria-pressed and flips it on click", () => {
-      const onWebCaptureChange = vi.fn();
-      const { rerender } = renderIframe({
-        tabs: ["http://localhost:8080/docs"],
-        webCapture: false,
-        onWebCaptureChange,
-      });
-      const btn = screen.getByTestId("web-capture-toggle");
-      expect(btn.getAttribute("aria-pressed")).toBe("false");
-      fireEvent.click(btn);
-      expect(onWebCaptureChange).toHaveBeenCalledWith(true);
-
-      rerender(
-        iframeElement({
-          onWriteUrl,
-          tabs: ["http://localhost:8080/docs"],
-          webCapture: true,
-          onWebCaptureChange,
-        }),
-      );
-      expect(screen.getByTestId("web-capture-toggle").getAttribute("aria-pressed")).toBe("true");
-      fireEvent.click(screen.getByTestId("web-capture-toggle"));
-      expect(onWebCaptureChange).toHaveBeenLastCalledWith(false);
-    });
+  // The keyboard-capture verb lives in the tile header (SurfaceLayout), not
+  // the URL bar.
+  it("renders no capture button in the URL bar", () => {
+    renderIframe({ tabs: ["http://localhost:8080/docs"], webCapture: true });
+    expect(screen.queryByTestId("web-capture-toggle")).toBeNull();
   });
 
   // Find bar (260819-ie2i R5/R7/R8): open seams, counter/navigation, the

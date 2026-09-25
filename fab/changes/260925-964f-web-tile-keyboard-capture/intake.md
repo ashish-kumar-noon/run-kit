@@ -22,7 +22,7 @@ A gui tile has a keyboard-capture latch (`rk-gui-capture`, ⌘⇧G, toolbar butt
 - **Binding:** a new `web-capture-toggle` builtin (⌘⇧G, `webOnly`, `ignoreInputs`, label "Keyboard capture"). The dispatcher runs the first matching binding whose handler is present, and each capture toggle's handler exists only on its own surface. So it shares ⌘⇧G with `gui-capture-toggle` (`guiOnly`) without a real clash. `findConflicts` generalizes its tty↔web gate exemption to cover any two different surface gates.
 - **Iframe engine:** `hasReclaimableMatch(..., captured)` narrows to the kind's release action (`web-capture-toggle` for web, `gui-capture-toggle` for gui). `reclaimChordForKind` passes `webCapture` for kind `web`.
 - **Native engine:** `buildWebChordTable(bindings, captured)`. When captured, the table holds only the release binding's arms and drops the focus-return Escape. It re-uploads through the existing `web:chords` effect whenever the table changes.
-- **Chrome:** a keyboard-glyph button in the IframeWindow URL bar, after Find. It has a "Keyboard capture" tip with the chord, uses `aria-pressed`, and turns accent-green when on.
+- **Chrome:** a keyboard-glyph verb in the web tile HEADER, beside the Expand / ✕ verbs. It has a "Keyboard capture" tip with the chord, uses `aria-pressed`, and turns accent-green when on. The first cut placed it in the URL bar next to Find; the user tested that and asked for the header instead.
 - **Tile header:** a `keys → page` chip while captured.
 - **Palette:** a `Web: Capture keyboard` / `Web: Release keyboard` verb, available when the web tile has a URL.
 

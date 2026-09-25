@@ -83,6 +83,7 @@ import {
   FindGlyph,
   FollowTerminalGlyph,
   FullscreenGlyph,
+  KeyboardGlyph,
   RefreshGlyph,
   SendHomeGlyph,
   SplitHorizontalGlyph,
@@ -92,6 +93,8 @@ import {
 } from "@/components/top-bar-icons";
 import type { ViewWindow } from "@/lib/window-view";
 import { activeWebUrl } from "@/lib/window-view";
+import { useKeybindings } from "@/hooks/use-keybindings";
+import { formatCombo } from "@/lib/keybindings";
 import {
   IDLE_PROGRESS,
   isValuedProgress,
@@ -526,11 +529,12 @@ interface SurfaceLayoutProps {
    *  block's capture verb latches. */
   guiCapture?: boolean;
   /** The web tile's keyboard-capture latch (`rk-web-capture`, owned by
-   *  app.tsx) — while set, the web header shows a `keys → page` chip and the
-   *  URL bar's capture verb latches; both web engines hand every chord but the
-   *  release binding to the page. */
+   *  app.tsx) — while set, the web header shows a `keys → page` chip and its
+   *  capture verb latches; both web engines hand every chord but the release
+   *  binding to the page. */
   webCapture?: boolean;
-  /** Flip the web capture latch (the URL-bar verb's click seam). */
+  /** Flip the web capture latch (the header verb's click seam). Absent ⇒ the
+   *  verb is not rendered. */
   onWebCaptureChange?: (on: boolean) => void;
   guiResizeLocked?: boolean;
   guiQuality?: GuiQuality;
@@ -790,7 +794,6 @@ function WebTileContent({
   onPageTitle,
   shouldReclaimChord,
   webCapture,
-  onWebCaptureChange,
 }: {
   server: string;
   /** The tile window's owning session (the override entry's session half). */
@@ -803,9 +806,9 @@ function WebTileContent({
   onInteract?: () => void;
   onPageTitle: (title: string | null) => void;
   shouldReclaimChord?: (e: KeyboardEvent) => boolean;
-  /** The web keyboard-capture latch + its flip seam (SurfaceLayout props). */
+  /** The web keyboard-capture latch (SurfaceLayout prop) — narrows the
+   *  native engine's chord table. */
   webCapture?: boolean;
-  onWebCaptureChange?: (on: boolean) => void;
 }) {
   const { addToast } = useToast();
   const webOverride = useWindowStore(
@@ -914,7 +917,6 @@ function WebTileContent({
       tabs={webOverride?.webTabs ?? win.webTabs ?? []}
       active={webOverride?.webActive ?? win.webActive}
       webCapture={webCapture}
-      onWebCaptureChange={onWebCaptureChange}
       // The tile's tmux identity — scopes the native engine's guest retention
       // (park/adopt) and the chrome-owned destroy rule. A foreign tile passes
       // its HOME window, so the surface keeps one guest wherever it is shown.
@@ -1032,6 +1034,14 @@ export function SurfaceLayout({
   ttyDockContent,
   themePalette = DEFAULT_DARK_THEME.palette,
 }: SurfaceLayoutProps) {
+  // The web header capture verb's tooltip chord — only while the binding is
+  // live (a keycap advertising a dead chord would lie; the gui toolbar's
+  // kbdFor rule).
+  const { byAction: bindingsByAction, host: bindingHost } = useKeybindings();
+  const webCaptureBinding = bindingsByAction.get("web-capture-toggle");
+  const webCaptureKbd = webCaptureBinding?.enabled
+    ? formatCombo({ code: webCaptureBinding.code, tier: webCaptureBinding.tier }, bindingHost.platform)
+    : undefined;
   // The tree's reading-order view for this render: leaf ids, kinds, the
   // structure signature (the sizes storage key), and the leaf count.
   const layoutLeafIds = leafIds(layout);
@@ -2708,7 +2718,6 @@ export function SurfaceLayout({
             win={windowRecordFor(tileWinId)}
             visible={visible}
             webCapture={webCapture}
-            onWebCaptureChange={onWebCaptureChange}
             onInteract={() => focusLeaf(leafId)}
             onPageTitle={(title) =>
               setWebPageTitles((prev) => {
@@ -3420,6 +3429,39 @@ export function SurfaceLayout({
                     </button>
                   </Tip>
                 )}
+                {showVerbs && (
+                  <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border" />
+                )}
+              </>
+            )}
+            {/* Web-tile keyboard capture (the gui header's pinned capture
+                verb, mirrored): while latched every chord but the release
+                binding reaches the page on both engines. Renders only with
+                page content (an onboarding tile has nothing to capture for —
+                the chord and palette verb share the gate) and never on
+                mobile (touch input never reaches the reclaim the verb
+                toggles). A hairline separates it from the layout verbs. */}
+            {!mobile && kind === "web" && tile.visible && webUrl !== "" && onWebCaptureChange && (
+              <>
+                <Tip label="Keyboard capture" kbd={webCaptureKbd}>
+                  <button
+                    type="button"
+                    data-testid="web-capture-toggle"
+                    data-no-tile-drag
+                    aria-label="Keyboard capture"
+                    aria-pressed={webCapture}
+                    onClick={() => onWebCaptureChange(!webCapture)}
+                    className={controlClass({
+                      variant: "toggle",
+                      base: VERB_BUTTON_BASE,
+                      rest: "hover:bg-bg-card hover:text-text-primary",
+                      ringed: true,
+                      pressed: webCapture,
+                    })}
+                  >
+                    <KeyboardGlyph />
+                  </button>
+                </Tip>
                 {showVerbs && (
                   <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border" />
                 )}
