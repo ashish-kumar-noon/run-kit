@@ -5,3 +5,5 @@
 {"action":"enter","event":"stage-transition","stage":"hydrate","ts":"2026-09-25T13:11:24Z"}
 {"event":"review","result":"passed","ts":"2026-09-25T13:11:24Z"}
 {"action":"enter","event":"stage-transition","stage":"ship","ts":"2026-09-25T13:11:24Z"}
+{"action":"enter","event":"stage-transition","stage":"review-pr","ts":"2026-09-25T13:12:03Z"}
+{"event":"review","result":"passed","ts":"2026-09-25T13:12:03Z"}
