@@ -956,6 +956,12 @@ type WindowInfo struct {
 	// tolerant: the raw value rides through unvalidated (validation is
 	// write-side; consumers parse).
 	Layout string `json:"layout,omitempty"`
+	// AwayIn maps a surface kind to the id of the window currently holding it
+	// as a foreign leaf ("@12/tty" in that window's layout) — the home window's
+	// view of a borrow, derived across ALL of the server's windows in
+	// FetchSessions via DeriveAwayIn (nothing stored, Constitution II). Absent
+	// kinds are not away. Dead homes and self-naming leaves never appear.
+	AwayIn map[string]string `json:"awayIn,omitempty"`
 	// WebTabs is the dense @rk_win_web_<n> family: slots 1..MaxWebTabs walked in
 	// order, stopping at the first empty (a hand-written gap degrades to the
 	// prefix — the write paths never produce gaps). Index 0 is tmux slot 1.
@@ -2945,9 +2951,10 @@ func appendOptionOps(args []string, target string, ops []WindowOptionOp) []strin
 }
 
 // SetWindowOptions applies a batch of window-option set/unset operations to the
-// window identified by windowID as a single \;-chained tmux invocation. Chaining
-// makes the whole merge atomic — the SSE poll never observes a half-applied
-// state — and reuses the same pattern CreateWindowWithOptions uses. A non-nil
+// window identified by windowID as a single \;-chained tmux invocation. The
+// chain is ordered, not atomic — ops apply in slice order, but a reader polling
+// mid-chain can observe a half-applied state — and reuses the same pattern
+// CreateWindowWithOptions uses. A non-nil
 // op.Value sets via `set-option -w -t <windowID> <key> <value>`; a nil Value
 // unsets via `set-option -w -u -t <windowID> <key>`. All arguments are passed as
 // an argv slice — no shell strings (constitution §I). A no-op (empty ops) issues
@@ -2958,6 +2965,43 @@ func SetWindowOptions(ctx context.Context, windowID, server string, ops []Window
 	}
 	args := appendOptionOps(nil, windowID, ops)
 	_, err := tmuxExecServer(ctx, server, args...)
+	return err
+}
+
+// WindowLayoutWrite is one window's new @rk_win_layout value, consumed by
+// SetWindowLayouts. Ordering is the caller's: pairs apply in slice order
+// within the one chained invocation.
+type WindowLayoutWrite struct {
+	WindowID string
+	Layout   string
+}
+
+// buildSetWindowLayoutsArgv composes the `set-option -w -t <id> @rk_win_layout
+// <value>` ops for several windows into one \;-chained argv via the shared
+// appendOptionOps chaining primitive (the SetWindowOptions pattern, one target
+// per pair). Pure.
+func buildSetWindowLayoutsArgv(pairs []WindowLayoutWrite) []string {
+	var args []string
+	for _, p := range pairs {
+		value := p.Layout
+		args = appendOptionOps(args, p.WindowID, []WindowOptionOp{{Key: LayoutOption, Value: &value}})
+	}
+	return args
+}
+
+// SetWindowLayouts writes several windows' @rk_win_layout values as a single
+// \;-chained tmux invocation — the borrow/return write contract. The chain is
+// ordered, not atomic: pairs apply in slice order (the caller puts the
+// holder's removal first, so the leaf is never added to the target while the
+// holder still shows it), and the api endpoints serialize the requests behind
+// a per-server lock (layoutWriteMu in api/layout_borrow.go), but a reader
+// polling between the chained writes can transiently observe the intermediate
+// state. A no-op (empty pairs) issues no tmux call.
+func SetWindowLayouts(ctx context.Context, server string, pairs []WindowLayoutWrite) error {
+	if len(pairs) == 0 {
+		return nil
+	}
+	_, err := tmuxExecServer(ctx, server, buildSetWindowLayoutsArgv(pairs)...)
 	return err
 }
 
