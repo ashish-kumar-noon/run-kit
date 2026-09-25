@@ -83,7 +83,7 @@
 <p class="sub">Design study for replacing the tile header's move buttons (Promote, Swap) with a drag on the tile's title that snaps into place, VS Code editor-group style, for any number of tiles. It builds on <code>docs/specs/surface-layout.md</code> (whose § Verbs already calls drag "sugar over the same three mutations") and the shipped <code>lib/surface-layout.ts</code> / <code>components/surface-layout.tsx</code>. Written 2026-09-24/25 in a <code>/fab-discuss</code> session against <code>d829bfa7</code>. The plan is <code>fab/plans/sahil/26-09-24-surface-drag-and-popout.md</code>; popout is the other half of that plan and is out of scope here. Every count and outcome on this page is computed by the tree resolver embedded below. The N = 5 reachability row is the one exception: it was precomputed offline with the same code.</p>
 
 <div class="box rec">
-<b class="k">Recommendation in six lines</b>
+<b class="k">Recommendation in seven lines</b>
 <ol>
   <li><b>The layout becomes a split tree, not a preset.</b> The number of distinct arrangements grows 2 → 6 → 22 → 90 → 394 for N = 2…6 tiles, so no preset list survives past three. The layout is a canonical tree: splits alternate direction by depth and every split has at least two children. Today's eight preset names become <em>templates</em> that build a tree for any N.</li>
   <li><b>A drop is one generic tree edit.</b> Wrap the target in a new split with a placeholder, remove the dragged tile from its old place, normalise, then put the tile into the placeholder. Center swaps two leaves. The same code covers N = 2 and N = 20, and at N = 3 it reproduces exactly the five presets plus the missing <code>main-bottom</code> (§1).</li>
@@ -91,6 +91,7 @@
   <li><b>Tile count is limited by space, not by a cap.</b> A drop or add is offered only if every resulting tile stays at least 150 × 100 px in this viewer's viewport. Mobile still shows one tile.</li>
   <li><b>Show the resulting layout, not a half-tile.</b> A drop can move every other tile. The overlay draws the whole result at the viewer's sizes.</li>
   <li><b>Moving one tile anywhere takes one drop.</b> Across whole layouts, the worst case is N − 1 drops, one per tile (§8). Promote/Swap stay in the palette (Constitution V).</li>
+  <li><b>Any tab's surface can snap into any other tab.</b> A tile names its source with ui-state.md's address format (<code>@12/tty</code>). A surface is <em>live</em> in exactly one place, and its home slot shows a placeholder with "bring back" while it is away. A ↩ button on the borrowed tile's title bar also sends it home. Everything is worked out from the layouts themselves, so nothing new is stored (§10).</li>
 </ol>
 </div>
 
@@ -104,7 +105,7 @@
 <a href="#s7">7 · Feedback: preview vs half-tile</a><br>
 <a href="#s8">8 · Reachability &amp; the nested-strip question</a><br>
 <a href="#s9">9 · Generic verbs</a><br>
-<a href="#s10">10 · What N &gt; 4 needs: multi-instance leaves</a><br>
+<a href="#s10">10 · Tiles from other tabs</a><br>
 <a href="#s11">11 · Implementation notes</a><br>
 <a href="#s12">12 · Decisions, rejected, open</a>
 </div>
@@ -120,7 +121,8 @@
 <div class="cols">
 <div>
 <pre>node  = leaf | split
-leaf  = surface ref                 tty · code · web · gui  (+ :ref later, §10)
+leaf  = kind [ "/" n ]              this tab:   tty · code · web/2 · gui
+      | [-L srv] "@" N "/" kind ["/" n]   another tab: @12/tty · @7/web/1  (§10)
 split = dir "(" node "," node {"," node} ")"     dir ∈ h | v
 
 canonical form (what every write produces):
@@ -133,7 +135,8 @@ canonical form (what every write produces):
   h(tty,web)                 ≡ split-h:tty,web
   h(tty,v(code,web))         ≡ main-left:tty,code,web
   v(h(code,web),tty)           main-bottom — no preset name today
-  v(h(tty,code),h(web,gui))    2×2, N = 4</pre>
+  v(h(tty,code),h(web,gui))    2×2, N = 4
+  h(tty,v(@12/tty,web/2))      a terminal borrowed from tab @12</pre>
 </div>
 <div>
 <ul>
@@ -167,7 +170,7 @@ canonical form (what every write produces):
 
 <!-- ============================================================ -->
 <h2 id="s4">4 · Live drag mock (N = 1…6)</h2>
-<p>Drag a tile by its header. <b>Center</b> swaps, a <b>tile edge</b> splits beside that tile, and a <b>layout edge</b> (the outer 18 px) spans a side. Dividers between tiles resize, standing in for the viewer's stored sizes. <kbd>Esc</kbd> or releasing over the dragged tile cancels. The <em>+ add</em> button runs the generic add verb (§9): it splits the <b>focused</b> tile (the last one clicked) along its longer axis.</p>
+<p>Drag a tile by its header. <b>Center</b> swaps, a <b>tile edge</b> splits beside that tile, and a <b>layout edge</b> (the outer 18 px) spans a side. Dividers between tiles resize, standing in for the viewer's stored sizes. <kbd>Esc</kbd> or releasing over the dragged tile cancels. The <em>+ add</em> button runs the generic add verb (§9): it splits the <b>focused</b> tile (the last one clicked) along its longer axis, or the largest tile if the focused one is too small. The fifth tile added is a terminal borrowed from tab <code>@12</code>. Its title bar carries the ↩ button that sends it home (§10).</p>
 <div class="ctl"><span class="lbl">template</span><span id="tpl-btns" style="display:contents"></span></div>
 <div class="ctl"><span class="lbl">tiles</span><button id="n-add">+ add (split focused)</button><button id="n-rm">− close focused</button>
   <span class="sep"></span><span class="lbl">zones</span><button id="t-root" class="on">layout edges</button><button id="t-nest" title="Rejected: shown for comparison">nested ancestor strips</button>
@@ -243,14 +246,45 @@ canonical form (what every write produces):
 </table></div>
 
 <!-- ============================================================ -->
-<h2 id="s10">10 · What N &gt; 4 needs: multi-instance leaves</h2>
-<p>Today a layout may hold each surface kind once, except <code>tty</code> (spec § One tile per surface kind). With four kinds, one of each, and duplicate ttys of the same pane, "more tiles" mostly means <em>more instances</em>: a second web tab beside the first, a tty of another pane or window, or a board-like mix of windows. The drag design does not care, because leaves are ids. The <em>content address</em> of an instance does, and that is the R7 question the spec punted.</p>
+<h2 id="s10">10 · Tiles from other tabs</h2>
+<p>Four tile kinds, one of each, cap a layout at four tiles. Instead of choosing which extra instance type to allow first, allow all of them. A tile may show <em>any</em> tab's surface, and it names that surface with the address format ui-state.md already defines: <code>[-L srv] @N/&lt;surface&gt;[/&lt;n&gt;]</code>. A bare kind still means the tab you are on. The drag design is unchanged, because the resolver moves leaves and never reads what they point at.</p>
+<div class="wrap"><table>
+<tr><th>Rule</th><th>Why</th></tr>
+<tr><td><b>A surface is live in exactly one place.</b> Borrowing A's terminal into B adds <code>@A/tty</code> to B's layout <em>only</em>. A's layout keeps its <code>tty</code> slot, which renders as a placeholder while some other tab's layout holds <code>@A/tty</code>.</td><td>Borrowing and returning each write one tab. Bring back restores the exact spot, because the slot never left. There are no duplicate code-server processes (~300 MB each) for one workspace.</td></tr>
+<tr><td><b>A ↩ button on the borrowed tile's title bar sends it home.</b> It shows only when the tile's home differs from the tab you are on. It removes <code>@A/tty</code> from B, and A's slot goes live again. If A has no slot any more (its placeholder was dismissed), it re-adds <code>tty</code> to A with the generic add rule.</td><td>The address names the home tab, so nothing new is stored (Constitution II).</td></tr>
+<tr><td><b>Re-borrowing moves it.</b> Borrowing <code>@A/tty</code> into C while B holds it removes it from B and adds it to C in one chained tmux invocation (the <code>MoveWindow</code> pattern). A ↩ that must also re-add A's slot uses the same chaining.</td><td>These are the only two-tab writes. No viewer ever sees the surface live in two tabs.</td></tr>
+<tr><td><b>The placeholder</b> reads "Terminal is in tab B", with <b>bring back</b>, <b>go to B</b>, the terminal's status dot, and <b>✕</b>. If the surface was the tab's only tile, the placeholder fills the tab. Clicking the tab's sidebar row lands here.</td><td>A waiting agent stays visible while its terminal is elsewhere (right-panel P4: hidden must never mean invisible). "Away" is worked out from the other tabs' layouts, which are already tmux state.</td></tr>
+<tr><td><b>✕ dismisses the placeholder</b>, removing the slot so the remaining tiles fill the space. <b>The top-bar surface toggle brings it back</b>: toggling <code>tty</code> on in A re-adds the slot, which renders as the placeholder again while the terminal is away.</td><td>Dead space is the user's choice, not a cost of borrowing. The toggle is the existing open-tile verb, and nothing new is needed.</td></tr>
+<tr><td><b>Addresses to closed windows are dropped</b> whenever a layout is read. ↩ is disabled for them.</td><td>Killing tab A must not leave a broken tile in B.</td></tr>
+<tr><td><b>A layout never empties.</b> When the last tile leaves (sent home, closed, or its window killed), the tab falls back to its own terminal.</td><td>Keeps today's "unset renders <code>single:tty</code>" rule.</td></tr>
+<tr><td><b>A borrowed terminal attaches its own single-window session.</b></td><td>Two terminal streams on one tmux session share its current window, so the tiles would fight. It is the same mechanism a popped-out terminal needs, and the one board pins already use.</td></tr>
+<tr><td><b>Same tmux server in the first version.</b></td><td>The address format supports other servers, but the relay and the two-tab write would then span two tmux servers.</td></tr>
+<tr><td><b><code>gui</code> is not borrowed.</b></td><td>It is one desktop per host, so any tab can simply add it.</td></tr>
+</table></div>
+<div class="cols">
+<div class="box"><b class="k">Tab @12 while its terminal is in tab @7</b>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;height:170px;margin-top:10px;font-size:11.5px">
+  <div style="border:1px dashed #56607a;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--dim);position:relative">
+    <span style="position:absolute;top:4px;right:8px;color:#56607a">✕</span>
+    <span><span style="color:var(--amber)">●</span> <b style="color:var(--fg)">&gt;_ Terminal</b> is in tab @7</span>
+    <span><button style="font:11px ui-monospace,monospace;border:1px solid var(--green);background:transparent;color:var(--green);border-radius:3px;padding:1px 8px">bring back</button> <button style="font:11px ui-monospace,monospace;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:3px;padding:1px 8px">go to @7</button></span>
+  </div>
+  <div style="background:#12151d;border:1px solid #2f3648;border-radius:6px;padding:6px 8px;color:var(--dim)"><b style="color:#c084fc">://</b> Web</div>
+</div>
+<p class="sub" style="font-size:11.5px">The slot stays and the status dot stays visible. Bring back is one write.</p></div>
+<div class="box"><b class="k">After ✕</b>
+<div style="display:grid;grid-template-columns:1fr;gap:6px;height:170px;margin-top:10px;font-size:11.5px">
+  <div style="background:#12151d;border:1px solid #2f3648;border-radius:6px;padding:6px 8px;color:var(--dim)"><b style="color:#c084fc">://</b> Web</div>
+</div>
+<p class="sub" style="font-size:11.5px">The web tile fills the tab. The top-bar <code>&gt;_</code> toggle shows an "away" marker, and toggling it on brings the placeholder back.</p></div>
+</div>
 <ul>
-  <li><b>The grammar reserves it now:</b> <code>leaf = kind [":" ref]</code>. Examples: <code>web:2</code> (web tab 2 of this window), <code>tty:%14</code> (a specific pane), <code>tty:@12</code> (another window). A bare kind keeps today's meaning.</li>
-  <li><b>Board convergence</b> (surface-layout.md § Boards): a board becomes a named tree whose leaves are <code>(window, view)</code> refs. That is the same tree, resolver and renderer with leaves pointing across windows. Building the tree now is the step phase 4 of that spec was waiting for.</li>
-  <li><b>Zoom and popout keys</b> move from kind to leaf ref, so two web tiles can be told apart.</li>
+  <li><b>The real cost is code that assumes "the terminal tile is this tab's window".</b> The compose strip, bottom-bar keys, the tty tile's Split/Close Pane buttons, the progress line, focus memory, and the first tty tile getting the shared socket must all follow the tile's own window.</li>
+  <li><b>Boards converge on this.</b> A board is a named layout whose tiles all point at other tabs. The same tree, resolver and renderer serve it, so boards migrate rather than stay a second mechanism (surface-layout.md § Boards).</li>
+  <li><b>Popout is the same idea</b>: a tile that lives in its own browser window. The popped set, zoom and focus key by the tile's address, not its kind.</li>
+  <li><b>Rejected: tmux <code>join-pane</code></b>, which physically moves the pane into tab B. It kills tab A if the pane was its only one, it changes what plain tmux users see, and snap-back would need a stored home.</li>
 </ul>
-<div class="box warn"><b class="k">Spec amendments this implies.</b> surface-layout.md: § Shape presets (templates over a canonical tree), § One tile per surface kind (the ref grammar), § Verbs (drag and generic verbs), the Constitution Mapping line "presets, not free trees; ≤3 tiles" (canonical tree plus size floor), and the note that a fourth surface is the signal to use a board. ui-state.md: § Layout in tmux (the encoding). Constitution IV itself is not touched, because it fixes routes and settings surfaces, not tile counts.</div>
+<div class="box warn"><b class="k">Spec amendments this implies.</b> surface-layout.md: § Shape presets (templates over a canonical tree), § One tile per surface kind (tiles from other tabs, move semantics), § Verbs (drag, generic verbs, ↩), the Constitution Mapping line "presets, not free trees; ≤3 tiles" (canonical tree plus size floor), the "fourth surface is the signal to use a board" note, and § Boards convergence. ui-state.md: § Layout in tmux (the encoding) and § Addressing Grammar (a layout tile uses it). Constitution IV itself is not touched, because it fixes routes and settings surfaces, not tile counts.</div>
 
 <!-- ============================================================ -->
 <h2 id="s11">11 · Implementation notes</h2>
@@ -274,11 +308,17 @@ canonical form (what every write produces):
 <tr><td>D6</td><td>The overlay previews the result; pointer capture; the native web view hides during a drag</td><td><span class="tag rec">proposed</span></td></tr>
 <tr><td>D7</td><td>Add splits the focused tile on its longer axis, falling back to the largest tile at the size floor. Close removes and normalises.</td><td><span class="tag rec">proposed</span></td></tr>
 <tr><td>D8</td><td>Promote/Swap leave the header and stay in the palette</td><td><span class="tag rec">proposed</span></td></tr>
+<tr><td>D9</td><td>Tiles may show any tab's surface on the same server, addressed as <code>@N/&lt;surface&gt;[/&lt;n&gt;]</code></td><td><span class="tag done">decided 2026-09-25</span></td></tr>
+<tr><td>D10</td><td>A surface is live in one place. Its home slot shows a placeholder (bring back · go to · status · ✕) while it is borrowed. ✕ lets the rest fill the space, and the surface toggle restores the slot. A ↩ on the borrowed tile sends it home.</td><td><span class="tag done">decided 2026-09-25</span></td></tr>
+<tr><td>D13</td><td>A borrow starts by dragging a tab's sidebar row onto a tile zone (same resolver and overlay), with palette <code>Tile: Bring … here</code> as the keyboard route. Only one tab renders at a time, so there is no tab-to-tab drag.</td><td><span class="tag done">decided 2026-09-25</span></td></tr>
+<tr><td>D12</td><td>Clicking a tab's sidebar row when its terminal is borrowed lands on the tab and its placeholder</td><td><span class="tag done">decided 2026-09-25</span></td></tr>
+<tr><td>D11</td><td>A borrowed or popped-out terminal attaches its own single-window session</td><td><span class="tag rec">proposed</span></td></tr>
 <tr><td>P1</td><td>Popout is per viewer</td><td><span class="tag done">decided 2026-09-24</span></td></tr>
 <tr><td>P2</td><td>Popout rides a viewer <code>?pop=</code> param on the existing route</td><td><span class="tag done">decided 2026-09-24</span></td></tr>
 </table></div>
 <h3>Rejected</h3>
 <ul>
+  <li><b>Choosing one extra instance type first</b> (a second web tab, another pane, another window). Tiles from any tab cover them all with one address format.</li>
   <li><b>Extending the preset list</b> (<code>main-bottom</code>, a 2×2, …). It is correct only up to three tiles, and there are 22 shapes at four.</li>
   <li><b>An unconstrained tree</b> (arbitrary nesting, unary nodes, stored sizes). The canonical form keeps one encoding per arrangement, and viewer-local sizes keep R7.</li>
   <li><b>Nested ancestor strips</b> (§8). <b>Half-tile-only feedback</b> (§7). <b>HTML5 drag-and-drop</b> (§11).</li>
@@ -286,7 +326,6 @@ canonical form (what every write produces):
 </ul>
 <h3>Open</h3>
 <ul>
-  <li><b>Which instances come first</b> once N &gt; 4 (§10): a second web tab, another pane's tty, or another window's tty? This decides the first <code>:ref</code> form.</li>
   <li>Should a 3-tile tree that matches an old preset keep writing the preset name for one release, so a rolled-back SPA still reads it?</li>
   <li>External drags (a top-bar surface toggle dragged into the layout) and tear-off (release outside the window to pop out): the follow-ups.</li>
 </ul>
@@ -531,8 +570,8 @@ const KINDS = [
   { g: "{}", label: "Code", c: "#7dd3fc", ref: "code" },
   { g: "://", label: "Web", c: "#c084fc", ref: "web" },
   { g: "[]", label: "GUI", c: "#fbbf24", ref: "gui" },
-  { g: ">_", label: "Terminal %14", c: "#4ade80", ref: "tty:%14" },
-  { g: "://", label: "Web 2", c: "#c084fc", ref: "web:2" },
+  { g: ">_", label: "Terminal", c: "#4ade80", ref: "@12/tty", home: "@12" },
+  { g: "://", label: "Web tab 2", c: "#c084fc", ref: "web/2" },
 ];
 const ROOT = 18, THRESH = 4, MINW = 150, MINH = 100;
 const st = { tree: norm(TEMPLATES["main-left"](3)), focus: 0, root: true, nest: false, fb: "preview", bands: false, floor: true, drag: null };
@@ -569,7 +608,13 @@ function render() {
     t.className = "tile"; t.dataset.id = id;
     Object.assign(t.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" });
     if (+id === st.focus) t.style.borderColor = "#5b6b8e";
-    t.innerHTML = `<div class="hd"><span class="grip">⠿</span><b style="color:${K.c}">${esc(K.g)}</b><b>${esc(K.label)}</b></div><div class="body"><div class="ln"></div><div class="ln s"></div><div class="ln"></div></div>`;
+    const homeBtn = K.home ? `<span class="sub" style="font-size:10.5px">from ${K.home}</span><button class="home" title="Send back to ${K.home}" style="margin-left:auto;font:11px ui-monospace,monospace;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:3px;padding:0 6px;cursor:pointer">↩ ${K.home}</button>` : "";
+    t.innerHTML = `<div class="hd"><span class="grip">⠿</span><b style="color:${K.c}">${esc(K.g)}</b><b>${esc(K.label)}</b>${homeBtn}</div><div class="body"><div class="ln"></div><div class="ln s"></div><div class="ln"></div></div>`;
+    const hb = t.querySelector("button.home");
+    if (hb) {
+      hb.addEventListener("pointerdown", (e) => e.stopPropagation());
+      hb.addEventListener("click", (e) => { e.stopPropagation(); snapBack(+id); });
+    }
     t.querySelector(".hd").addEventListener("pointerdown", (e) => onDown(e, +id));
     t.addEventListener("click", () => { if (st.focus !== +id) { st.focus = +id; render(); } });
     tilesEl.appendChild(t);
@@ -732,6 +777,13 @@ function addTile() {
   st.tree = r.tree;
   ro.last.textContent = `add ${KINDS[id].label}: split ${KINDS[host].label}${fell ? " (largest; focused tile too small)" : " (focused)"} along its longer axis (${r.side === "right" ? "width" : "height"})`;
   st.focus = id; render();
+}
+function snapBack(id) {
+  // a layout never empties: when the last tile leaves, the tab falls back to its own terminal
+  st.tree = leaves(st.tree).length < 2 ? { leaf: 0 } : norm(removeLeaf(st.tree, id));
+  if (st.focus === id) st.focus = leaves(st.tree)[0];
+  ro.last.innerHTML = `↩ sent ${esc(KINDS[id].label)} back to ${KINDS[id].home}: one write removes <code>${KINDS[id].ref}</code> here, and ${KINDS[id].home}'s <code>tty</code> slot, which showed a placeholder, goes live again`;
+  render();
 }
 function closeTile() {
   if (leaves(st.tree).length < 2) return;
