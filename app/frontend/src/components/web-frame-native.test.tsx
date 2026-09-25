@@ -861,8 +861,9 @@ describe("WebFrameNative tileError surface", () => {
     expect(rig.states.get(rig.url)?.tileError).toBeNull();
   });
 
-  it("the guest hides while tileError is set and re-shows once cleared", () => {
+  it("the guest hides while tileError is set and re-shows once cleared", async () => {
     const { rig } = renderEngine({ url: "http://localhost:3000" });
+    await flushMount();
     bridge.visible.mockClear();
     deliver({
       tabKey: rig.tabKey,
@@ -899,9 +900,83 @@ describe("WebFrameNative placeholder", () => {
   });
 });
 
-describe("WebFrameNative bounds", () => {
-  it("sends the rounded rect on a ResizeObserver callback and dedupes an identical rect", () => {
+describe("WebFrameNative first paint (create race)", () => {
+  // Main rejects bounds/visible before the guest exists ("Unknown tab"), and
+  // the create lands only after the host-mode query + proxy settle — slow in
+  // remote-native mode (a tunnel probe). The engine must hold its first
+  // bounds/visible until the create resolves, then send the CURRENT values;
+  // otherwise the guest sat at main's 0×0 default until a window resize.
+  function holdCreate() {
+    let resolveCreate: (v: { ok: boolean }) => void = () => {};
+    bridge.create.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveCreate = resolve; }),
+    );
+    return (ok = true) => resolveCreate({ ok });
+  }
+
+  it("sends nothing before the create resolves, then bounds followed by visible(true)", async () => {
+    const release = holdCreate();
+    bridge.bounds.mockClear();
+    bridge.visible.mockClear();
     const { rig } = renderEngine();
+    await flushMount();
+    expect(bridge.create).toHaveBeenCalled();
+    expect(bridge.bounds).not.toHaveBeenCalled();
+    expect(bridge.visible).not.toHaveBeenCalled();
+    release();
+    await flushMount();
+    expect(bridge.bounds).toHaveBeenCalledWith(rig.tabKey, 10, 20, 800, 600);
+    expect(bridge.visible).toHaveBeenCalledWith(rig.tabKey, true);
+    const boundsOrder = bridge.bounds.mock.invocationCallOrder[0];
+    const showOrder = bridge.visible.mock.invocationCallOrder[0];
+    expect(boundsOrder).toBeLessThan(showOrder);
+  });
+
+  it("a rect change while the create is pending is sent once the guest exists (the latest rect wins)", async () => {
+    const release = holdCreate();
+    bridge.bounds.mockClear();
+    const { rig } = renderEngine();
+    await flushMount();
+    setRect({ x: 1, y: 2, width: 300, height: 200 });
+    fireResize();
+    expect(bridge.bounds).not.toHaveBeenCalled();
+    release();
+    await flushMount();
+    expect(bridge.bounds).toHaveBeenCalledTimes(1);
+    expect(bridge.bounds).toHaveBeenCalledWith(rig.tabKey, 1, 2, 300, 200);
+  });
+
+  it("an inactive tab whose create resolves sends visible(false), and activating later shows it", async () => {
+    const release = holdCreate();
+    bridge.visible.mockClear();
+    const { rig, rerenderEngine } = renderEngine({ active: false });
+    await flushMount();
+    release();
+    await flushMount();
+    expect(bridge.visible).toHaveBeenCalledWith(rig.tabKey, false);
+    expect(bridge.visible).not.toHaveBeenCalledWith(rig.tabKey, true);
+    rerenderEngine({ active: true });
+    expect(bridge.visible).toHaveBeenLastCalledWith(rig.tabKey, true);
+  });
+
+  it("a failed create sends no bounds or visibility", async () => {
+    const release = holdCreate();
+    bridge.bounds.mockClear();
+    bridge.visible.mockClear();
+    renderEngine();
+    await flushMount();
+    release(false);
+    await flushMount();
+    fireResize();
+    expect(bridge.bounds).not.toHaveBeenCalled();
+    expect(bridge.visible).not.toHaveBeenCalled();
+  });
+});
+
+describe("WebFrameNative bounds", () => {
+  it("sends the rounded rect on a ResizeObserver callback and dedupes an identical rect", async () => {
+    const { rig } = renderEngine();
+    await flushMount();
     bridge.bounds.mockClear();
     setRect({ x: 100.4, y: 50.6, width: 640.2, height: 480 });
     fireResize();
@@ -911,8 +986,9 @@ describe("WebFrameNative bounds", () => {
     expect(bridge.bounds).toHaveBeenCalledTimes(1);
   });
 
-  it("sends no bounds for a zero-size rect and drives visible(false) instead", () => {
+  it("sends no bounds for a zero-size rect and drives visible(false) instead", async () => {
     const { rig } = renderEngine();
+    await flushMount();
     bridge.bounds.mockClear();
     bridge.visible.mockClear();
     setRect({ x: 0, y: 0, width: 0, height: 0 });
@@ -921,8 +997,9 @@ describe("WebFrameNative bounds", () => {
     expect(bridge.visible).toHaveBeenCalledWith(rig.tabKey, false);
   });
 
-  it("keeps sending bounds while the guest is hidden by a modal overlay (main parks them)", () => {
+  it("keeps sending bounds while the guest is hidden by a modal overlay (main parks them)", async () => {
     const { rig } = renderEngine();
+    await flushMount();
     bridge.bounds.mockClear();
     bridge.visible.mockClear();
     let release: () => void = () => {};
@@ -943,8 +1020,9 @@ describe("WebFrameNative bounds", () => {
     expect(lastBoundsOrder).toBeLessThan(showOrder);
   });
 
-  it("a transient overlay (a click-opened menu) hides the guest and releasing restores it", () => {
+  it("a transient overlay (a click-opened menu) hides the guest and releasing restores it", async () => {
     const { rig } = renderEngine();
+    await flushMount();
     bridge.visible.mockClear();
     let release: () => void = () => {};
     act(() => {
@@ -958,8 +1036,9 @@ describe("WebFrameNative bounds", () => {
 });
 
 describe("WebFrameNative visibility", () => {
-  it("an inactive tab mounts hidden; activating it re-measures and shows the guest", () => {
+  it("an inactive tab mounts hidden; activating it re-measures and shows the guest", async () => {
     const { rig, rerenderEngine } = renderEngine({ active: false });
+    await flushMount();
     expect(bridge.visible).toHaveBeenCalledWith(rig.tabKey, false);
     bridge.visible.mockClear();
     bridge.bounds.mockClear();
@@ -974,8 +1053,9 @@ describe("WebFrameNative visibility", () => {
 });
 
 describe("WebFrameNative drag postures", () => {
-  it("resize posture: sends deduped bounds on every pumped frame and never hides; the stop edge measures once more", () => {
+  it("resize posture: sends deduped bounds on every pumped frame and never hides; the stop edge measures once more", async () => {
     const { rig, rerenderEngine } = renderEngine({ posture: "resize" });
+    await flushMount();
     bridge.bounds.mockClear();
     bridge.visible.mockClear();
     setRect({ x: 0, y: 0, width: 100, height: 100 });
@@ -999,8 +1079,9 @@ describe("WebFrameNative drag postures", () => {
     expect(bridge.bounds).toHaveBeenCalledTimes(4);
   });
 
-  it("move posture hides the guest, runs no live-resize loop, and re-shows on the return to idle", () => {
+  it("move posture hides the guest, runs no live-resize loop, and re-shows on the return to idle", async () => {
     const { rig, rerenderEngine } = renderEngine();
+    await flushMount();
     bridge.bounds.mockClear();
     bridge.visible.mockClear();
     rerenderEngine({ posture: "move" });
